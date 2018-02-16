@@ -7,15 +7,25 @@ using UnityEngine.Assertions;
 public class CloudTexture : MonoBehaviour {
 
     #region const fields
-    const int kSizeOfVolume = 16;
-    const int kNumberOfBuffer = kSizeOfVolume * kSizeOfVolume * kSizeOfVolume;
+    const int kSizeOfVolume = 32;
+    const int kdepth = 32;
+    const int kNumberOfBuffer = kSizeOfVolume * kSizeOfVolume * kdepth;
     #endregion
 
     #region member variables
     [SerializeField]
     private Texture3D _noiseTexture;
+
+    public Texture3D NoiseTexture
+    {
+        get { return _noiseTexture; }
+    }
     [SerializeField]
-    [Range(0, kSizeOfVolume-1)] private int _debugLayer = 0;
+    [Range(0, kdepth-1)] private int _debugLayer = 0;
+    [SerializeField]
+    [Range(0, 3)] private int _colorLayer = 0;
+    [SerializeField]
+    private bool _displayDebugTexture = false;
     private Texture2D _debugTexture;
     private Color[] _debugData;
 
@@ -42,7 +52,8 @@ public class CloudTexture : MonoBehaviour {
             Destroy(this._noiseTexture);
         }
 
-        this._noiseTexture = new Texture3D(kSizeOfVolume, kSizeOfVolume, kSizeOfVolume, TextureFormat.Alpha8, false);
+        this._noiseTexture = new Texture3D(kSizeOfVolume, kSizeOfVolume, kdepth, TextureFormat.ARGB32, false);
+
         this._debugTexture = new Texture2D(kSizeOfVolume, kSizeOfVolume, TextureFormat.ARGB32, false);
         this._debugData = new Color[kSizeOfVolume* kSizeOfVolume];
     }
@@ -58,19 +69,32 @@ public class CloudTexture : MonoBehaviour {
 
         this._mat = new Material(this._rs);
     }
+
+    // Utility function that maps a value from one range to another.
+    float Remap(float original_value, float original_min, float original_max, float new_min, float new_max)
+    {
+        return new_min + (((original_value - original_min) / (original_max - original_min)) * (new_max - new_min));
+    }
+
     void FillTextureData(Texture3D texture)
     {
         Assert.IsNotNull(texture);
         Assert.IsTrue(texture.width == texture.height);
-        Assert.IsTrue(texture.width == texture.depth);
+        //Assert.IsTrue(texture.width == texture.depth);
         Assert.IsTrue(texture.width == kSizeOfVolume);
 
-        var noiseGenerater = new NoiseTools.PerlinNoise(10, 1, 0);
+        var perlinNoise = new NoiseTools.PerlinNoise(2, 1, 0);
+        var worleyNoise = new NoiseTools.WorleyNoise(5, 1, 0);
 
-        this._data = new Particle[kSizeOfVolume * kSizeOfVolume * kSizeOfVolume];
-        var data = new Color[kSizeOfVolume * kSizeOfVolume * kSizeOfVolume];
+        var worleyNoiseF1 = new NoiseTools.WorleyNoise(5, 1, 0);
+        var worleyNoiseF2 = new NoiseTools.WorleyNoise(7, 1, 0);
+        var worleyNoiseF3 = new NoiseTools.WorleyNoise(10, 1, 0);
+
+
+        this._data = new Particle[kNumberOfBuffer];
+        var data = new Color[kNumberOfBuffer];
         var index = 0;
-        var scale = 1.0f / kNumberOfBuffer;
+        var scale = 1.0f / kSizeOfVolume;
 
         var min = float.MaxValue;
         var max = float.MinValue;
@@ -81,21 +105,28 @@ public class CloudTexture : MonoBehaviour {
             for (uint j = 0; j < kSizeOfVolume; ++j)
             {
                 var y = j * scale;
-                for (uint k = 0; k < kSizeOfVolume; ++k)
+                for (uint k = 0; k < kdepth; ++k)
                 {
                     var z = k * scale;
 
-                    var c = noiseGenerater.GetFractal(x, y, z, 5);
-                    data[index] = new Color(c, c, c, c);
+                    var perlin = perlinNoise.GetFractal(x, y, z, 10);
+                    var worley = worleyNoise.GetFractal(x, y, z, 10);
+                    var worleyf1 = worleyNoiseF1.GetFractal(x, y, z, 2);
+                    var worleyf2 = worleyNoiseF2.GetFractal(x, y, z, 2);
+                    var worleyf3 = worleyNoiseF3.GetFractal(x, y, z, 2);
+
+                    var perlin_worley = this.Remap(perlin, -(1 - worley), 1, 0, 1);
+
+                    data[index] = new Color(perlin_worley, worleyf1, worleyf2, worleyf3);
 
                     this._data[index].position = new Vector3(i, j, k);
-                    this._data[index].color = new Vector4(c, c, c, c);
+                    this._data[index].color = new Vector4(perlin_worley, worleyf1, worleyf2, worleyf3);
                     index++;
 
-                    Debug.LogFormat("{0}", c);
+                    //Debug.LogFormat("{0}", c);
 
-                    max = c > max ? c : max;
-                    min = c < min ? c : min;
+                    //max = c > max ? c : max;
+                    //min = c < min ? c : min;
 
                 }
             }
@@ -110,7 +141,7 @@ public class CloudTexture : MonoBehaviour {
     }
 
     // Use this for initialization
-    void Start () {
+    void Awake () {
         this.CreateVolumeTexture();
         this.InitRenderData();
 
@@ -118,6 +149,8 @@ public class CloudTexture : MonoBehaviour {
 
         Assert.IsNotNull(_data);
         this._buffer.SetData(this._data);
+
+        //FindObjectOfType<Texture3DViewer>().MapData(this.NoiseTexture);
     }
 	
 	// Update is called once per frame
@@ -129,7 +162,8 @@ public class CloudTexture : MonoBehaviour {
         {
             for (uint k = 0; k < kSizeOfVolume; ++k)
             {
-                this._debugData[debugIndex++] = (this._data[index].color - new Vector4(0.4f, 0.4f, 0.4f, 0.4f)) * 10;
+                var c = this._data[index].color[_colorLayer];
+                this._debugData[debugIndex++] = new Color(c, c, c, 1);
                 index++;
             }
         }
@@ -140,7 +174,10 @@ public class CloudTexture : MonoBehaviour {
 
     private void OnGUI()
     {
-        GUI.DrawTexture(new Rect(0, 0, 512, 512), this._debugTexture);
+        if(_displayDebugTexture)
+        {
+            GUI.DrawTexture(new Rect(0, 0, 512, 512), this._debugTexture);
+        }
     }
 
     private void OnRenderObject()
@@ -150,8 +187,8 @@ public class CloudTexture : MonoBehaviour {
         this._mat.SetBuffer("_buffer", this._buffer);
         this._mat.SetMatrix("_inv_view_mat", Camera.main.worldToCameraMatrix.inverse);
         this._mat.SetFloat("_particle_size", this._particleSize);
-
-        Graphics.DrawProcedural(MeshTopology.Points, kNumberOfBuffer);
+        
+        //Graphics.DrawProcedural(MeshTopology.Points, kNumberOfBuffer);
     }
     #endregion
 }
