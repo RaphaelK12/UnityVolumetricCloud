@@ -1,4 +1,6 @@
-﻿Shader "Render/CloudShader"
+﻿// Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
+
+Shader "Render/CloudShader"
 {
 	Properties
 	{
@@ -44,6 +46,7 @@
 			sampler3D _NoiseTex;
 
 			float _StartValue;
+			int _SampleValue;
 			
 			
 			v2f vert (vIn v)
@@ -67,13 +70,22 @@
 				//positionVS.z = _ProjectionParams.y;
 
 				//set the position on the near plane so we can start ray marching from here
-				positionVS.z = _CameraNearPlane;
+				//positionVS.z = _CameraNearPlane;
 				positionVS.w = 1;
+
 
 				//positionVS is also view space direction
 				//so transform it back to word space
 				o.dir_ws = float4(mul((float3x3)_MainCameraInvView, positionVS.xyz), 0 );
 
+				return o;
+			}
+
+			v2f vert_new(vIn v)
+			{
+				v2f o = (v2f)0;
+				o.position = UnityObjectToClipPos(v.position);
+				o.dir_ws = mul(unity_ObjectToWorld, v.position) - float4(0.5,0.5,-1.0f,1.0f);
 				return o;
 			}
 
@@ -84,11 +96,34 @@
 
 			float SampleNoise(float3 uvw)
 			{
-				uvw /= 64;
+				uvw /= _SampleValue;
 				return tex3Dlod(_NoiseTex, float4(uvw,0)).r;
 			}
+			// Utility function that maps a value from one range to another.
+			float Remap(float original_value, float original_min, float original_max, float new_min, float new_max)
+			{
+				return new_min + (((original_value - original_min) / (original_max - original_min)) * (new_max - new_min));
+			}
 
-			float intersectSDF(float distA, float distB) {
+			float SampleCloudNoise(float3 uvw)
+			{
+				float cloud = 0;
+				uvw /= _SampleValue;
+				float4 low_frequency_noises = tex3Dlod(_NoiseTex, float4(uvw, 0));
+
+				//return low_frequency_noises.a;
+
+				float low_freq_fBm = (low_frequency_noises.g * 0.625) + (low_frequency_noises.b * 0.25) + (low_frequency_noises.a * 0.125);
+
+				//return low_freq_fBm;
+				// define the base cloud shape by dilating it with the low frequency fBm made of Worley noise.
+				float base_cloud = Remap(low_frequency_noises.r, -(1.0 - low_freq_fBm), 1.0, 0.0, 1.0);
+
+				return base_cloud;
+			}
+
+			float intersectSDF(float distA, float distB) 
+			{
 				return max(distA, distB);
 			}
 			float udBox(float4 p, float4 b)
@@ -100,40 +135,101 @@
 			{
 				return udBox(pos, float4(10,10,10,1));
 			}
+
+			float RayMarchingSphere(float4 dir_ws)
+			{
+				float4 dir = dir_ws;//normalize(dir_ws);
+				
+				int num_samples = 500;
+
+				float end = 10000;
+				float current_depth = 0;
+
+				//current_depth = _StartValue;
+				float step_length = 0.01;
+
+				//if (current_depth > 0) return 0;
+
+				float result = 0;
+
+				for (int i = 0; i < num_samples; ++i)
+				{
+					float4 current = _CameraPosWS + dir * current_depth;
+					float value = SphereSDF(current);
+
+					if (value < 0.01)
+					{
+						return 1;
+					}
+
+					current_depth += step_length;
+				}
+
+				return result;
+			}
+
+
 			float RayMarching(float4 dir_ws)
 			{
 				float4 dir = normalize(dir_ws);
 				float3 view_dir = UNITY_MATRIX_IT_MV[2].xyz;
 				view_dir = normalize(view_dir);
 				dir /= dot(view_dir, dir);
+
+				if (dir.y < 0.01) return 0.2f;
+
+				int num_samples = 500;
+				//this is y range for cloud
+				float2 debugBroader = float2(3200, 1500);
+
+				float2 sample_max_min = debugBroader / dir.y;
+				float step_length = (sample_max_min.x - sample_max_min.y)  / num_samples;
+
+
 				float end = 10000;
-				float step_length = 1;
-				float current_depth = _StartValue;
+				float current_depth = sample_max_min.y;
+
+				//current_depth = _StartValue;
+				//step_length = 1;
+
+				//if (current_depth > 0) return 0;
 
 				float result = 0;
+				float dst = 0;
 
-				for (int i = 0; i < 100; ++i)
+				for (int i = 0; i < num_samples; ++i)
 				{
 					float4 current = _CameraPosWS + dir * current_depth;
 					
-					int debugBroader = 32;
 					/*if (abs(current.x) > debugBroader || abs(current.y) > debugBroader || abs(current.z) > debugBroader)
 					{
 						return 0;
 					}*/
 
-					if (abs(current.y) > debugBroader)
+					if (abs(current.y) > debugBroader.x)
 					{
-						//return 0;
+						return 0;
 					}
 
-					float value = SampleNoise(current);
+					float value = SampleCloudNoise(current);
 
 					//float cubeValue = BoxSDF(current);
+
+					float src = value;
+					src *= 0.5;
+
+					// blend
+					dst = (1.0 - dst) * src + dst;
+
+					if (dst > 0.4) {
+						//return dst;
+					}
 
 					//value = intersectSDF(value, cubeValue);
 					if (value > 0)
 					{
+						float4 sky = float4(0.2, 0, 0.5, 1);
+						value = lerp(value, sky, saturate(sample_max_min.x / 10000));
 						return value;
 					}
 
@@ -141,9 +237,17 @@
 
 					if (current_depth > end)
 					{
+						float4 sky = float4(0, 0, 0.5, 1);
+						end = lerp(end, sky, saturate(sample_max_min.x / 5000));
 						return end;
 					}
 				}
+
+
+				float4 sky = float4(0, 0, 0.5, 1);
+				end = lerp(end, sky, saturate(sample_max_min.x / 5000));
+				//col = i.dir_ws;
+
 				return end;
 			}
 			
@@ -156,7 +260,7 @@
 				float4 col = float4(0,0,0,1);
 				//do ray matching here;
 
-				float result = RayMarching(i.dir_ws);
+				//float result = RayMarching(i.dir_ws);
 
 				
 
@@ -166,8 +270,17 @@
 				//col.rgba = result < 0.9 ? result : 0;
 				//col.a = result < 0.9 ? result : 1;
 
-				//col = i.dir_ws;
-				col = result > 9999 ? 0 : result;
+				col.r = RayMarchingSphere(i.dir_ws);
+				//i.dir_ws = normalize(i.dir_ws);
+
+				float4 dir = normalize(i.dir_ws);
+				float3 view_dir = UNITY_MATRIX_IT_MV[2].xyz;
+				view_dir = normalize(view_dir);
+				//dir.xyz = view_dir / dot(view_dir, dir);
+				//col.rg = (i.dir_ws.xy);// +1) *0.5;
+				//col.r = -col.r;
+
+				//col = result;// > 9999 ? 0 : result;
 				return col;
 			}
 			ENDCG

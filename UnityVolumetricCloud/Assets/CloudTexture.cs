@@ -16,6 +16,9 @@ public class CloudTexture : MonoBehaviour {
     [SerializeField]
     private Texture3D _noiseTexture;
 
+    [SerializeField]
+    private Texture2D _coverageTexture;
+
     public Texture3D NoiseTexture
     {
         get { return _noiseTexture; }
@@ -83,12 +86,12 @@ public class CloudTexture : MonoBehaviour {
         //Assert.IsTrue(texture.width == texture.depth);
         Assert.IsTrue(texture.width == kSizeOfVolume);
 
-        var perlinNoise = new NoiseTools.PerlinNoise(2, 1, 0);
-        var worleyNoise = new NoiseTools.WorleyNoise(5, 1, 0);
+        var perlinNoise = new NoiseTools.PerlinNoise(4, 1, 0);
+        var worleyNoise = new NoiseTools.WorleyNoise(7, 1, 0);
 
-        var worleyNoiseF1 = new NoiseTools.WorleyNoise(5, 1, 0);
-        var worleyNoiseF2 = new NoiseTools.WorleyNoise(7, 1, 0);
-        var worleyNoiseF3 = new NoiseTools.WorleyNoise(10, 1, 0);
+        var worleyNoiseF1 = new NoiseTools.WorleyNoise(10, 1, 0);
+        var worleyNoiseF2 = new NoiseTools.WorleyNoise(15, 1, 0);
+        var worleyNoiseF3 = new NoiseTools.WorleyNoise(20, 1, 0);
 
 
         this._data = new Particle[kNumberOfBuffer];
@@ -109,15 +112,15 @@ public class CloudTexture : MonoBehaviour {
                 {
                     var z = k * scale;
 
-                    var perlin = perlinNoise.GetFractal(x, y, z, 10);
-                    var worley = worleyNoise.GetFractal(x, y, z, 10);
+                    var perlin = perlinNoise.GetFractal(x, y, z, 4);
+                    var worley = worleyNoise.GetFractal(x, y, z, 2);
                     var worleyf1 = worleyNoiseF1.GetFractal(x, y, z, 2);
                     var worleyf2 = worleyNoiseF2.GetFractal(x, y, z, 2);
                     var worleyf3 = worleyNoiseF3.GetFractal(x, y, z, 2);
 
                     var perlin_worley = this.Remap(perlin, -(1 - worley), 1, 0, 1);
 
-                    data[index] = new Color(perlin_worley, worleyf1, worleyf2, worleyf3);
+                    data[index] = new Color(perlin_worley, 1-worleyf1, 1-worleyf2, 1-worleyf3);
 
                     this._data[index].position = new Vector3(i, j, k);
                     this._data[index].color = new Vector4(perlin_worley, worleyf1, worleyf2, worleyf3);

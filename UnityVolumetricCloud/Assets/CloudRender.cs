@@ -18,6 +18,10 @@ public class CloudRender : MonoBehaviour {
     [SerializeField]
     [Range(0, 100)] private float _start = 20;
 
+    [SerializeField]
+    [Range(0, 10000)]
+    private float _sample = 2300;
+
     // Use this for initialization
     void Start () {
 
@@ -47,6 +51,7 @@ public class CloudRender : MonoBehaviour {
         this._mat.SetTexture("_NoiseTex", this._noiseTex.NoiseTexture);
 
         this._mat.SetFloat("_StartValue", this._start);
+        this._mat.SetFloat("_SampleValue", this._sample);
 
     }
 

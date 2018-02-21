@@ -57,7 +57,7 @@ namespace NoiseTools
 
         #region Protected members
 
-        int _freq;
+        float _freq;
         int _repeat;
         int _seed;
 
