@@ -24,7 +24,7 @@ public class CloudTexture : MonoBehaviour {
         get { return _noiseTexture; }
     }
     [SerializeField]
-    [Range(0, kdepth-1)] private int _debugLayer = 0;
+    [Range(0, kdepth - 1)] private int _debugLayer = 0;
     [SerializeField]
     [Range(0, 3)] private int _colorLayer = 0;
     [SerializeField]
@@ -50,7 +50,7 @@ public class CloudTexture : MonoBehaviour {
     #region public functions
     public void CreateVolumeTexture()
     {
-        if(this._noiseTexture != null)
+        if (this._noiseTexture != null)
         {
             Destroy(this._noiseTexture);
         }
@@ -58,7 +58,7 @@ public class CloudTexture : MonoBehaviour {
         this._noiseTexture = new Texture3D(kSizeOfVolume, kSizeOfVolume, kdepth, TextureFormat.ARGB32, false);
 
         this._debugTexture = new Texture2D(kSizeOfVolume, kSizeOfVolume, TextureFormat.ARGB32, false);
-        this._debugData = new Color[kSizeOfVolume* kSizeOfVolume];
+        this._debugData = new Color[kSizeOfVolume * kSizeOfVolume];
     }
 
     #endregion
@@ -77,6 +77,12 @@ public class CloudTexture : MonoBehaviour {
     float Remap(float original_value, float original_min, float original_max, float new_min, float new_max)
     {
         return new_min + (((original_value - original_min) / (original_max - original_min)) * (new_max - new_min));
+    }
+
+    float InvertWorley(float worley)
+    {
+        worley = worley * Mathf.Lerp(1, 2.0f, worley);
+        return 1-worley;
     }
 
     void FillTextureData(Texture3D texture)
@@ -118,9 +124,9 @@ public class CloudTexture : MonoBehaviour {
                     var worleyf2 = worleyNoiseF2.GetFractal(x, y, z, 2);
                     var worleyf3 = worleyNoiseF3.GetFractal(x, y, z, 2);
 
-                    var perlin_worley = this.Remap(perlin, -(1 - worley), 1, 0, 1);
+                    var perlin_worley = this.Remap(perlin, -InvertWorley(worley), 1, 0, 1);
 
-                    data[index] = new Color(perlin_worley, 1-worleyf1, 1-worleyf2, 1-worleyf3);
+                    data[index] = new Color(perlin_worley, InvertWorley(worleyf1), InvertWorley(worleyf2), InvertWorley(worleyf3));
 
                     this._data[index].position = new Vector3(i, j, k);
                     this._data[index].color = new Vector4(perlin_worley, worleyf1, worleyf2, worleyf3);

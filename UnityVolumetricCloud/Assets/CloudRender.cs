@@ -16,6 +16,11 @@ public class CloudRender : MonoBehaviour {
     private CloudTexture _noiseTex;
 
     [SerializeField]
+    private Texture2D _height;
+    [SerializeField]
+    private Texture2D _weather;
+
+    [SerializeField]
     [Range(0, 100)] private float _start = 20;
 
     [SerializeField]
@@ -49,6 +54,8 @@ public class CloudRender : MonoBehaviour {
         this._mat.SetFloat("_CameraNearPlane", this._camera.nearClipPlane);
 
         this._mat.SetTexture("_NoiseTex", this._noiseTex.NoiseTexture);
+        this._mat.SetTexture("_Height", this._height);
+        this._mat.SetTexture("_Weather", this._weather);
 
         this._mat.SetFloat("_StartValue", this._start);
         this._mat.SetFloat("_SampleValue", this._sample);

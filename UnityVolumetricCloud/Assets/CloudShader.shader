@@ -36,6 +36,8 @@ Shader "Render/CloudShader"
 			};
 
 			sampler2D _MainTex;
+			sampler2D _Height;
+			sampler2D _Weather;
 			float4 _MainTex_ST;
 
 			float4 _CameraPosWS;
@@ -105,11 +107,33 @@ Shader "Render/CloudShader"
 				return new_min + (((original_value - original_min) / (original_max - original_min)) * (new_max - new_min));
 			}
 
-			float SampleCloudNoise(float3 uvw)
+
+			// fractional value for sample position in the cloud layer
+			float GetHeightFractionForPoint(float3 inPosition, float2 inCloudMaxMin)
 			{
+				// get global fractional position in cloud zone
+				float height_fraction = (inPosition.y - inCloudMaxMin.y) / (inCloudMaxMin.x - inCloudMaxMin.y);
+
+				return saturate(height_fraction);
+			}
+
+			float SampleCloudNoise(float3 uvw, float2 sample_max_min)
+			{
+
+				float height_fraction = GetHeightFractionForPoint(uvw, sample_max_min);
+				float density_height_gradient = tex2Dlod(_Height, float4(0, height_fraction, 0, 0));
+
+
+
 				float cloud = 0;
 				uvw /= _SampleValue;
 				float4 low_frequency_noises = tex3Dlod(_NoiseTex, float4(uvw, 0));
+
+				float cloud_coverage = tex2Dlod(_Weather, float4(uvw.xz, 0, 0));
+				float anvil_bias = 0.3;
+
+				// apply anvil deformations
+				cloud_coverage = pow(cloud_coverage, Remap(height_fraction, 0.7, 0.8, 1.0, lerp(1.0, 0.5, anvil_bias)));
 
 				//return low_frequency_noises.a;
 
@@ -118,6 +142,8 @@ Shader "Render/CloudShader"
 				//return low_freq_fBm;
 				// define the base cloud shape by dilating it with the low frequency fBm made of Worley noise.
 				float base_cloud = Remap(low_frequency_noises.r, -(1.0 - low_freq_fBm), 1.0, 0.0, 1.0);
+
+				base_cloud *= cloud_coverage;
 
 				return base_cloud;
 			}
@@ -169,16 +195,13 @@ Shader "Render/CloudShader"
 			}
 
 
-			float RayMarching(float4 dir_ws)
+			float4 RayMarching(float4 dir_ws)
 			{
-				float4 dir = normalize(dir_ws);
-				float3 view_dir = UNITY_MATRIX_IT_MV[2].xyz;
-				view_dir = normalize(view_dir);
-				dir /= dot(view_dir, dir);
+				float4 dir = dir_ws;
 
 				if (dir.y < 0.01) return 0.2f;
 
-				int num_samples = 500;
+				int num_samples = 128;
 				//this is y range for cloud
 				float2 debugBroader = float2(3200, 1500);
 
@@ -194,8 +217,8 @@ Shader "Render/CloudShader"
 
 				//if (current_depth > 0) return 0;
 
-				float result = 0;
-				float dst = 0;
+				float4 result = float4(0,0,0,0);
+				float4 dst = float4(0, 0, 0, 0);
 
 				for (int i = 0; i < num_samples; ++i)
 				{
@@ -208,38 +231,38 @@ Shader "Render/CloudShader"
 
 					if (abs(current.y) > debugBroader.x)
 					{
-						return 0;
+						return float4(0,0,0,0);
 					}
 
-					float value = SampleCloudNoise(current);
+					float value = SampleCloudNoise(current, sample_max_min);
 
 					//float cubeValue = BoxSDF(current);
 
-					float src = value;
-					src *= 0.5;
-
+					/*float4 src = float4(value, value, value, value);
 					// blend
 					dst = (1.0 - dst) * src + dst;
 
-					if (dst > 0.4) {
-						//return dst;
-					}
+					dst.xyz = (1.0 - dst.a) * src.a * src.xyz + dst.xyz;
+					dst.a = (1.0 - dst.a)  * src.a + dst.a;
 
-					//value = intersectSDF(value, cubeValue);
-					if (value > 0)
-					{
-						float4 sky = float4(0.2, 0, 0.5, 1);
-						value = lerp(value, sky, saturate(sample_max_min.x / 10000));
-						return value;
-					}
-
-					current_depth += step_length;
+					if (dst.a > 0) {
+						return dst;
+					}*/
+						result.rgba += value;
+						//value = intersectSDF(value, cubeValue);
+						if (result.a > 0.4)
+						{
+							float4 sky = float4(0.2, 0, 0.5, 1);
+							result.rgb = lerp(result.rgb, sky, saturate(sample_max_min.x / 10000));
+							return result;
+						}
+					current_depth += step_length ;
 
 					if (current_depth > end)
 					{
 						float4 sky = float4(0, 0, 0.5, 1);
-						end = lerp(end, sky, saturate(sample_max_min.x / 5000));
-						return end;
+						//end = lerp(end, sky, saturate(sample_max_min.x / 5000));
+						return float4(end, end, end, end);
 					}
 				}
 
@@ -270,7 +293,7 @@ Shader "Render/CloudShader"
 				//col.rgba = result < 0.9 ? result : 0;
 				//col.a = result < 0.9 ? result : 1;
 
-				col.r = RayMarchingSphere(i.dir_ws);
+				col.rgba = RayMarching(i.dir_ws);
 				//i.dir_ws = normalize(i.dir_ws);
 
 				float4 dir = normalize(i.dir_ws);
