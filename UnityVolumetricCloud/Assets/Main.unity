@@ -522,6 +522,6 @@ MonoBehaviour:
   _shader: {fileID: 4800000, guid: 1db8a3522df77c243bc4aa8c64a1901f, type: 3}
   _noiseTex: {fileID: 0}
   _height: {fileID: 2800000, guid: 9b922a4899268a44b820937bb9097ba2, type: 3}
-  _weather: {fileID: 10300, guid: 0000000000000000f000000000000000, type: 0}
+  _weather: {fileID: 2800000, guid: ba8f33b8d8cb1124f9a61ccfb84837e0, type: 3}
   _start: 0
   _sample: 2300

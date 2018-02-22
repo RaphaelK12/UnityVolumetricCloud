@@ -250,11 +250,11 @@ Shader "Render/CloudShader"
 					}*/
 						result.rgba += value;
 						//value = intersectSDF(value, cubeValue);
-						if (result.a > 0.4)
+						if (result.a > 0.99)
 						{
 							float4 sky = float4(0.2, 0, 0.5, 1);
-							result.rgb = lerp(result.rgb, sky, saturate(sample_max_min.x / 10000));
-							return result;
+							value = lerp(value, sky, saturate(sample_max_min.x / 10000));
+							return float4(value, value, value,1);
 						}
 					current_depth += step_length ;
 
@@ -262,7 +262,7 @@ Shader "Render/CloudShader"
 					{
 						float4 sky = float4(0, 0, 0.5, 1);
 						//end = lerp(end, sky, saturate(sample_max_min.x / 5000));
-						return float4(end, end, end, end);
+						return float4(0.2, 0.2, 0.2,1);
 					}
 				}
 
@@ -271,7 +271,7 @@ Shader "Render/CloudShader"
 				end = lerp(end, sky, saturate(sample_max_min.x / 5000));
 				//col = i.dir_ws;
 
-				return end;
+				return result;
 			}
 			
 			float4 frag (v2f i) : SV_Target
