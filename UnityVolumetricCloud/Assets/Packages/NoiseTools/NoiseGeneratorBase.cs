@@ -9,7 +9,7 @@ namespace NoiseTools
         public NoiseGeneratorBase(int frequency, int repeat, int seed = 0)
         {
             _freq = frequency;
-            _repeat = repeat * frequency;
+            _repeat = repeat * (int)frequency;
             _seed = seed;
         }
 
@@ -57,11 +57,11 @@ namespace NoiseTools
 
         #region Protected members
 
-        float _freq;
+        int _freq;
         int _repeat;
         int _seed;
 
-        protected float Frequency { get { return _freq; } }
+        public int Frequency { get { return _freq; } }
 
         protected int Repeat(int i)
         {
