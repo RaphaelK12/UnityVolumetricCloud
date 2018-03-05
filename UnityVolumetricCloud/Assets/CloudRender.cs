@@ -27,6 +27,12 @@ public class CloudRender : MonoBehaviour {
     [Range(0, 10000)]
     private float _sample = 2300;
 
+
+    [SerializeField]
+    private float _couldBaseUVScale = 5;
+
+    [SerializeField]
+    private float _weatherUVScale = 1/30000.0f;
     // Use this for initialization
     void Start () {
 
@@ -58,7 +64,7 @@ public class CloudRender : MonoBehaviour {
         this._mat.SetTexture("_Weather", this._weather);
 
         this._mat.SetFloat("_StartValue", this._start);
-        this._mat.SetFloat("_SampleValue", this._sample);
+
 
     }
 

@@ -48,7 +48,11 @@ Shader "Render/CloudShader"
 			sampler3D _NoiseTex;
 
 			float _StartValue;
-			int _SampleValue;
+
+			float _CloudBaseUVScale;
+			float _WeatherUVScale;
+
+            float4 _CloudHeightMaxMin;
 			
 			
 			v2f vert (vIn v)
@@ -98,7 +102,7 @@ Shader "Render/CloudShader"
 
 			float SampleNoise(float3 uvw)
 			{
-				uvw /= _SampleValue;
+				uvw *= _CloudBaseUVScale;
 				return tex3Dlod(_NoiseTex, float4(uvw,0)).r;
 			}
 			// Utility function that maps a value from one range to another.
@@ -117,6 +121,17 @@ Shader "Render/CloudShader"
 				return saturate(height_fraction);
 			}
 
+			float PhaseHenyeyGreenStein(float inScatteringAngle, float g)
+			{
+				return ((1.0 - g * g) / pow((1.0 + g * g - 2.0 * g * inScatteringAngle), 3.0 / 2.0)) / (4.0 * 3.14159);
+			}
+
+
+			float Beer(float opticalDepth)
+			{
+				return exp(1 * 0.01f * opticalDepth);
+			}
+
 			float SampleCloudNoise(float3 uvw, float2 sample_max_min)
 			{
 
@@ -126,10 +141,14 @@ Shader "Render/CloudShader"
 
 
 				float cloud = 0;
-				uvw /= _SampleValue;
+				
+				const float baseFreq = 1e-5;
+				uvw *=_CloudBaseUVScale * baseFreq;
+
 				float4 low_frequency_noises = tex3Dlod(_NoiseTex, float4(uvw, 0));
 
-				float cloud_coverage = tex2Dlod(_Weather, float4(uvw.xz, 0, 0));
+				float2 weather_uv = uvw.xz * _WeatherUVScale;
+				float cloud_coverage = tex2Dlod(_Weather, float4(weather_uv, 0, 0));
 				float anvil_bias = 0.3;
 
 				// apply anvil deformations
@@ -146,6 +165,55 @@ Shader "Render/CloudShader"
 				base_cloud *= cloud_coverage;
 
 				return base_cloud;
+			}
+
+			
+			float3 SampleLight(float4 current, float dir)
+			{
+				const float3 RandomUnitSphere[6] = 
+				{
+					{0.3f, -0.8f, -0.5f},
+					{0.9f, -0.3f, -0.2f},
+					{-0.9f, -0.3f, -0.1f},
+					{-0.5f, 0.5f, 0.7f},
+					{-1.0f, 0.3f, 0.0f},
+					{-0.3f, 0.9f, 0.4f}
+				};
+
+				//first get step size and step num
+				float steps = 6;
+				float step_size = _CloudHeightMaxMin.z / steps;
+
+				float3 light_dir = _WorldSpaceLightPos0.xyz;
+				float3 light_color = float3(1,1,1);
+				float3 eye_pos  = _CameraPosWS;
+
+				float CosThea = dot(dir, light_dir);
+
+
+				float3 dir_step_length = light_dir * step_size;
+				float3 pos = current + 0.5*dir_step_length;
+
+				float density_sum = 0;
+
+				for(int i = 0; i < steps; ++i)
+				{
+					float3 random_sample = RandomUnitSphere[i] * dir_step_length * (i + 1);
+
+					float3 sample_pos = pos + random_sample;
+
+					float cloud_noise = SampleCloudNoise(sample_pos, _CloudHeightMaxMin.xy);
+
+					density_sum += cloud_noise;
+
+					pos += dir_step_length;
+				}
+
+				float hg = PhaseHenyeyGreenStein(CosThea, 0.7);
+				float beer = Beer(density_sum);
+
+				return light_color * hg * beer;
+
 			}
 
 			float intersectSDF(float distA, float distB) 
@@ -195,18 +263,18 @@ Shader "Render/CloudShader"
 			}
 
 
+
 			float4 RayMarching(float4 dir_ws)
 			{
 				float4 dir = dir_ws;
 
-				if (dir.y < 0.01) return 0.2f;
+                clip(dir.y);
 
+                
 				int num_samples = 128;
 				//this is y range for cloud
-				float2 debugBroader = float2(3200, 1500);
-
-				float2 sample_max_min = debugBroader / dir.y;
-				float step_length = (sample_max_min.x - sample_max_min.y)  / num_samples;
+                float2 sample_max_min = _CloudHeightMaxMin.xy / dir.y;
+                float step_length = _CloudHeightMaxMin.z / num_samples;
 
 
 				float end = 10000;
@@ -220,6 +288,8 @@ Shader "Render/CloudShader"
 				float4 result = float4(0,0,0,0);
 				float4 dst = float4(0, 0, 0, 0);
 
+				float opticalDepth = 0;
+
 				for (int i = 0; i < num_samples; ++i)
 				{
 					float4 current = _CameraPosWS + dir * current_depth;
@@ -229,33 +299,31 @@ Shader "Render/CloudShader"
 						return 0;
 					}*/
 
-					if (abs(current.y) > debugBroader.x)
+					if (abs(current.y) > _CloudHeightMaxMin.x)
 					{
 						return float4(0,0,0,0);
 					}
 
-					float value = SampleCloudNoise(current, sample_max_min);
+					float value = SampleCloudNoise(current, _CloudHeightMaxMin.xy);
 
-					//float cubeValue = BoxSDF(current);
+					if(value > 0)
+					{
+						float3 light = SampleLight(current, dir.xyz);
+						
+						opticalDepth += value;
+						
+						result.rgb += light * Beer(opticalDepth);
+					}
 
-					/*float4 src = float4(value, value, value, value);
-					// blend
-					dst = (1.0 - dst) * src + dst;
 
-					dst.xyz = (1.0 - dst.a) * src.a * src.xyz + dst.xyz;
-					dst.a = (1.0 - dst.a)  * src.a + dst.a;
-
-					if (dst.a > 0) {
-						return dst;
-					}*/
-						result.rgba += value;
-						//value = intersectSDF(value, cubeValue);
-						if (result.a > 0.99)
-						{
-							float4 sky = float4(0.2, 0, 0.5, 1);
-							value = lerp(value, sky, saturate(sample_max_min.x / 10000));
-							return float4(value, value, value,1);
-						}
+					result.rgba += value;
+					//value = intersectSDF(value, cubeValue);
+					if (result.a > 0.99)
+					{
+						float4 sky = float4(0.2, 0, 0.5, 1);
+						value = lerp(value, sky, saturate(sample_max_min.x / 10000));
+						return float4(value, value, value,1.0 - Beer(opticalDepth));
+					}
 					current_depth += step_length ;
 
 					if (current_depth > end)
@@ -266,12 +334,147 @@ Shader "Render/CloudShader"
 					}
 				}
 
+				
+				result.a = 1.0 - Beer(opticalDepth);
 
 				float4 sky = float4(0, 0, 0.5, 1);
 				end = lerp(end, sky, saturate(sample_max_min.x / 5000));
 				//col = i.dir_ws;
 
 				return result;
+			}
+
+			float4 SampleWeatherTexture(float3 pos)
+			{			
+				const float baseFreq = 1e-5;
+				float2 weather_uv = pos.xz * _WeatherUVScale *baseFreq;
+				return tex2Dlod(_Weather, float4(weather_uv, 0, 0));
+			}
+
+			float4 SampleCloudTexture(float3 pos)
+			{
+				const float baseFreq = 1e-5;
+				pos *= _CloudBaseUVScale * baseFreq;
+				return tex3Dlod(_NoiseTex, float4(pos,0));
+			}
+
+			float SampleCloudDensity(float3 p, float4 weather)
+			{				
+				//Sample base shape
+				float4 low_frequency_noises = SampleCloudTexture(p);
+
+				float low_freq_fBm = (low_frequency_noises.g * 0.625) + (low_frequency_noises.b * 0.25) + (low_frequency_noises.a * 0.125);
+				
+				// define the base cloud shape by dilating it with the low frequency fBm made of Worley noise.
+				float base_cloud = Remap(low_frequency_noises.r, -(1.0 - low_freq_fBm), 1.0, 0.0, 1.0);
+
+				//TODO: missing density_height_gradient
+
+				//cloud coverage is stored in the weather_data's red channel.
+				float cloud_coverage = weather.r;
+
+				// apply anvil deformations
+				//cloud_coverage = pow(cloud_coverage, Remap(height_fraction, 0.7, 0.8, 1.0, lerp(1.0, 0.5, anvil_bias)));
+				
+				//Use remapper to apply cloud coverage attribute
+				float base_cloud_with_coverage  = Remap(base_cloud, cloud_coverage, 1.0, 0.0, 1.0); 
+
+				//Multiply result by cloud coverage so that smaller clouds are lighter and more aesthetically pleasing.
+				base_cloud_with_coverage *= cloud_coverage;
+
+				//define final cloud value
+				float final_cloud = base_cloud_with_coverage;
+
+				//TODO: missing detailed sample
+				return final_cloud;
+			}
+
+			
+			float3 SampleLight(float3 pos, float3 eyeRay)
+			{
+				const float3 RandomUnitSphere[6] = 
+				{
+					{0.3f, -0.8f, -0.5f},
+					{0.9f, -0.3f, -0.2f},
+					{-0.9f, -0.3f, -0.1f},
+					{-0.5f, 0.5f, 0.7f},
+					{-1.0f, 0.3f, 0.0f},
+					{-0.3f, 0.9f, 0.4f}
+				};
+				
+				float3 lightDir = _WorldSpaceLightPos0.xyz;
+				float3 lightColor = float3(1,1,1);
+				
+				float step_num = 6;
+				float3 stepLength = (_CloudHeightMaxMin.z / step_num) * lightDir;
+
+				float CosThea = dot(eyeRay, lightDir);
+				
+				float densitySum = 0.0;
+
+				for (int i = 0; i < step_num; i++)
+				{
+					float3 random_sample = RandomUnitSphere[i] * stepLength * (i + 1);
+
+					float3 sample_pos = pos + random_sample;
+					
+					float4 weather = SampleWeatherTexture(sample_pos);
+
+					float cloud_noise = SampleCloudDensity(sample_pos, weather);
+
+					densitySum += cloud_noise;
+
+					pos += stepLength;
+				}
+
+				float hg = PhaseHenyeyGreenStein(CosThea, 0.7);
+				float beer = Beer(densitySum);
+
+				return lightColor * hg * beer;
+			}
+
+			float4 RayMarchingCloud(float3 eyeRay)
+			{			
+                if(eyeRay.y < 0) return float4(0.2,0.2,0.2,1);
+
+				float4 final = float4(0,0,0,1);
+				//1.get the start and end point of cloud
+				//from _CloudHeightMaxMin
+				float2 sampleMaxMin = _CloudHeightMaxMin.xy / eyeRay.y;
+
+				float3 pos = _CameraPosWS + (eyeRay * sampleMaxMin.y);
+
+				//if(_CloudHeightMaxMin.y == 1500) return float4(1,0,0,1);
+				//2.calucate step length and step num
+				//TODO: higher eyeRay.y will get lower step num
+				int step_num = 128;
+				float3 stepLength = (sampleMaxMin.x - sampleMaxMin.y) / step_num; 
+
+				float densitySum = 0;
+
+				//3.start raymarcing for loop
+				for(int i = 0 ; i < step_num; ++i)
+				{
+					//3.1 get current sample point					
+					//3.2 sample cloud noise
+					float4 weather = SampleWeatherTexture(pos);
+					float cloudDensity = SampleCloudDensity(pos, weather); 
+					//3.3 if noise value > 0
+					if(cloudDensity > 0)
+					{
+						//3.3.1 sample light for this point
+						float3 lightColor = SampleLight(pos, eyeRay);
+						//3.3.2 blend light color with current depth
+						densitySum += cloudDensity;
+					}
+					if(densitySum > 0.8) break;
+					//3.4 move step_length forward
+					pos += stepLength;
+					
+				}
+				
+				final.rgb = densitySum;
+				return final;
 			}
 			
 			float4 frag (v2f i) : SV_Target
@@ -285,7 +488,8 @@ Shader "Render/CloudShader"
 
 				//float result = RayMarching(i.dir_ws);
 
-				
+				//return i.dir_ws;
+				return RayMarchingCloud(i.dir_ws.xyz);
 
 				//col = float4(i.dir_ws,1);
 
