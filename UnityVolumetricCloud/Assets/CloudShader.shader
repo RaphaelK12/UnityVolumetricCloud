@@ -442,9 +442,9 @@ Shader "Render/CloudShader"
 				}
 
 				float hg = HenyeyGreenstein(eyeRay, lightDir, 0.7);
-				float light_energy = 1;// = Beer(densitySum);
+				float light_energy = Beer(densitySum);
 
-				return lightColor * hg * light_energy;
+				return lightColor * hg * light_energy * 0.01;
 			}
 
 			float4 RayMarchingCloud(float3 eyeRay, float4 bg)
