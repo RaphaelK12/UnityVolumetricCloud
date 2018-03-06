@@ -35,9 +35,9 @@ public class Cloud : MonoBehaviour {
     private float _sample = 2300;
 
     [SerializeField]
-    private float _cloudMin = 1500;
+    private float _cloudHeightMin = 1500;
     [SerializeField]
-    private float _cloudMax = 3500;
+    private float _cloudHeightMax = 3500;
 
 
     [SerializeField]
@@ -71,7 +71,7 @@ public class Cloud : MonoBehaviour {
         this._mat.SetFloat("_StartValue", this._start);
         this._mat.SetFloat("_SampleValue", this._sample);
 
-        this._mat.SetVector("_CloudHeightMaxMin", new Vector4(this._cloudMax, this._cloudMin, this._cloudMax - this._cloudMin, 0));
+        this._mat.SetVector("_CloudHeightMaxMin", new Vector4(this._cloudHeightMax, this._cloudHeightMin, this._cloudHeightMax - this._cloudHeightMin, 0));
 
 
         this._mat.SetFloat("_CloudBaseUVScale", this._cloudBaseUVScale);

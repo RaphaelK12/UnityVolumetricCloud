@@ -10,6 +10,9 @@ Shader "Render/CloudShader"
 	{
 		Tags { "RenderType" = "Opaque" }
 		LOD 100
+		
+		//Cull Off ZWrite Off ZTest Always
+		//Blend One OneMinusSrcAlpha
 
 		Pass
 		{
@@ -21,17 +24,20 @@ Shader "Render/CloudShader"
 			#pragma enable_d3d11_debug_symbols
 
 			#include "UnityCG.cginc"
+			#include "Lighting.cginc" // for light color
 			#include "Assets/Common.cginc"
 
 			struct vIn
 			{
-				float4 position		: SV_POSITION;
+				float4 position		: POSITION;
+				float2 uv			: TEXCOORD0;
 
 			};
 
 			struct v2f
 			{
 				float4 position	: SV_POSITION;
+				float2 uv		: TEXCOORD1;
 				float4 dir_ws	: TEXCOORD0;
 			};
 
@@ -59,6 +65,7 @@ Shader "Render/CloudShader"
 			{
 				v2f o = (v2f)0;
 				o.position = UnityObjectToClipPos(v.position);
+				o.uv = v.uv;
 
 				//here to create a clip space position 
 				//with z value that on the near clip plane.
@@ -125,11 +132,17 @@ Shader "Render/CloudShader"
 			{
 				return ((1.0 - g * g) / pow((1.0 + g * g - 2.0 * g * inScatteringAngle), 3.0 / 2.0)) / (4.0 * 3.14159);
 			}
+						
+			float HenyeyGreenstein ( float3 inLightVector , float3 inViewVector , float inG )
+			{
+				float cos_angle = dot ( normalize ( inLightVector ) , normalize ( inViewVector )) ;
+				return ((1.0 - inG * inG ) / pow ((1.0 + inG * inG - 2.0 * inG * cos_angle ) , 3.0 / 2.0)) / 4.0 * 3.1415926f;
+			}
 
 
 			float Beer(float opticalDepth)
 			{
-				return exp(1 * 0.01f * opticalDepth);
+				return exp( - 0.01f * opticalDepth);
 			}
 
 			float SampleCloudNoise(float3 uvw, float2 sample_max_min)
@@ -186,7 +199,6 @@ Shader "Render/CloudShader"
 
 				float3 light_dir = _WorldSpaceLightPos0.xyz;
 				float3 light_color = float3(1,1,1);
-				float3 eye_pos  = _CameraPosWS;
 
 				float CosThea = dot(dir, light_dir);
 
@@ -402,13 +414,15 @@ Shader "Render/CloudShader"
 					{-0.3f, 0.9f, 0.4f}
 				};
 				
+				//this dir point to light position for direction light
 				float3 lightDir = _WorldSpaceLightPos0.xyz;
-				float3 lightColor = float3(1,1,1);
+				float3 lightColor = _LightColor0.rgb;
 				
 				float step_num = 6;
-				float3 stepLength = (_CloudHeightMaxMin.z / step_num) * lightDir;
+				float stepScale = (_CloudHeightMaxMin.z / step_num);
+				float3 stepLength =  stepScale * lightDir;
 
-				float CosThea = dot(eyeRay, lightDir);
+				//float CosThea = dot(eyeRay, lightDir);
 				
 				float densitySum = 0.0;
 
@@ -422,20 +436,20 @@ Shader "Render/CloudShader"
 
 					float cloud_noise = SampleCloudDensity(sample_pos, weather);
 
-					densitySum += cloud_noise;
+					densitySum += cloud_noise * stepScale;
 
 					pos += stepLength;
 				}
 
-				float hg = PhaseHenyeyGreenStein(CosThea, 0.7);
-				float beer = Beer(densitySum);
+				float hg = HenyeyGreenstein(eyeRay, lightDir, 0.7);
+				float light_energy = 1;// = Beer(densitySum);
 
-				return lightColor * hg * beer;
+				return lightColor * hg * light_energy;
 			}
 
-			float4 RayMarchingCloud(float3 eyeRay)
+			float4 RayMarchingCloud(float3 eyeRay, float4 bg)
 			{			
-                if(eyeRay.y < 0) return float4(0.2,0.2,0.2,1);
+                if(eyeRay.y < 0) return bg;
 
 				float4 final = float4(0,0,0,1);
 				//1.get the start and end point of cloud
@@ -448,7 +462,8 @@ Shader "Render/CloudShader"
 				//2.calucate step length and step num
 				//TODO: higher eyeRay.y will get lower step num
 				int step_num = 128;
-				float3 stepLength = (sampleMaxMin.x - sampleMaxMin.y) / step_num; 
+				float stepScale = (sampleMaxMin.x - sampleMaxMin.y) / step_num; 
+				float3 stepLength = eyeRay * stepScale;
 
 				float densitySum = 0;
 
@@ -462,18 +477,26 @@ Shader "Render/CloudShader"
 					//3.3 if noise value > 0
 					if(cloudDensity > 0)
 					{
+						float densityScaled = cloudDensity * stepScale;
 						//3.3.1 sample light for this point
 						float3 lightColor = SampleLight(pos, eyeRay);
 						//3.3.2 blend light color with current depth
-						densitySum += cloudDensity;
+						densitySum += densityScaled;
+						lightColor *= densityScaled;
+
+						final.rgb += lightColor * (1-Beer(densitySum));
 					}
-					if(densitySum > 0.8) break;
+					//if(densitySum > 0.8) break;
 					//3.4 move step_length forward
 					pos += stepLength;
-					
 				}
 				
-				final.rgb = densitySum;
+				final.a = 1-Beer(densitySum);
+
+				
+				final = final + (1-final.a) * bg;
+
+
 				return final;
 			}
 			
@@ -483,13 +506,12 @@ Shader "Render/CloudShader"
 				//Graphics.Blit(source, destination, this._mat);
 				//will render a full screnn quad for position (0,1) in  both x and y
 				//so it is better to map this to (-1,1)
-				float4 col = float4(0,0,0,1);
+				float4 bg = tex2D(_MainTex, i.uv);
 				//do ray matching here;
-
 				//float result = RayMarching(i.dir_ws);
 
 				//return i.dir_ws;
-				return RayMarchingCloud(i.dir_ws.xyz);
+				return RayMarchingCloud(i.dir_ws.xyz, bg);
 
 				//col = float4(i.dir_ws,1);
 
@@ -497,7 +519,7 @@ Shader "Render/CloudShader"
 				//col.rgba = result < 0.9 ? result : 0;
 				//col.a = result < 0.9 ? result : 1;
 
-				col.rgba = RayMarching(i.dir_ws);
+				/*col.rgba = RayMarching(i.dir_ws);
 				//i.dir_ws = normalize(i.dir_ws);
 
 				float4 dir = normalize(i.dir_ws);
@@ -508,7 +530,7 @@ Shader "Render/CloudShader"
 				//col.r = -col.r;
 
 				//col = result;// > 9999 ? 0 : result;
-				return col;
+				return col;*/
 			}
 			ENDCG
 		}
