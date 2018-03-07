@@ -500,11 +500,12 @@ Shader "Render/CloudShader"
 					pos += stepLength;
 				}
 				
-				final.a = 1-BeerLambert(densitySum);
+				final.a = 1-BeerLambert(densitySum);				
 
+				float horizonFade = (1.0f - saturate(sampleMaxMin.x / 30000));
+				final *= horizonFade;
 				
 				final = final + (1-final.a) * bg;
-
 
 				return final;
 			}
