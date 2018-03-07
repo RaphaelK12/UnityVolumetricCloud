@@ -46,6 +46,14 @@ public class Cloud : MonoBehaviour {
     [SerializeField]
     private float _weatherUVScale = 1;
 
+    [SerializeField]
+    private float AbsportionCoEff = 0;
+    [SerializeField]
+    private float ScatteringCoEff = 0.01f;
+
+    [SerializeField]
+    private float lightingScale = 0.01f;
+
 
     // Use this for initialization
     void Start ()
@@ -76,6 +84,10 @@ public class Cloud : MonoBehaviour {
 
         this._mat.SetFloat("_CloudBaseUVScale", this._cloudBaseUVScale);
         this._mat.SetFloat("_WeatherUVScale", this._weatherUVScale);
+
+        this._mat.SetFloat("_AbsportionCoEff", this.AbsportionCoEff);
+        this._mat.SetFloat("_ScatteringCoEff", this.ScatteringCoEff);
+        this._mat.SetFloat("_LightingScale", this.lightingScale);
     }
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)

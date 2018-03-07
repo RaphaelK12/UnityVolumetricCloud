@@ -59,6 +59,12 @@ Shader "Render/CloudShader"
 			float _WeatherUVScale;
 
             float4 _CloudHeightMaxMin;
+
+			//cloud rendering parameters
+			float _AbsportionCoEff;
+			float _ScatteringCoEff;
+
+			float _LightingScale;
 			
 			
 			v2f vert (vIn v)
@@ -133,16 +139,19 @@ Shader "Render/CloudShader"
 				return ((1.0 - g * g) / pow((1.0 + g * g - 2.0 * g * inScatteringAngle), 3.0 / 2.0)) / (4.0 * 3.14159);
 			}
 						
+			//this will get In-Scattering term
 			float HenyeyGreenstein ( float3 inLightVector , float3 inViewVector , float inG )
 			{
 				float cos_angle = dot ( normalize ( inLightVector ) , normalize ( inViewVector )) ;
-				return ((1.0 - inG * inG ) / pow ((1.0 + inG * inG - 2.0 * inG * cos_angle ) , 3.0 / 2.0)) / 4.0 * 3.1415926f;
+				return ((1.0 - inG * inG ) / (4.0 * 3.1415926f * pow ((1.0 + inG * inG - 2.0 * inG * cos_angle ) , 3.0 / 2.0)));
 			}
 
-
-			float Beer(float opticalDepth)
+			//this will get Extinction term
+			//we can get Transparence from this
+			float BeerLambert(float opticalDepth)
 			{
-				return exp( - 0.01f * opticalDepth);
+				float ExtinctionCoEff = _AbsportionCoEff + _ScatteringCoEff;
+				return exp( -ExtinctionCoEff * opticalDepth);
 			}
 
 			float SampleCloudNoise(float3 uvw, float2 sample_max_min)
@@ -222,9 +231,9 @@ Shader "Render/CloudShader"
 				}
 
 				float hg = PhaseHenyeyGreenStein(CosThea, 0.7);
-				float beer = Beer(density_sum);
+				float beer = BeerLambert(density_sum);
 
-				return light_color * hg * beer;
+				return light_color * beer * hg ;
 
 			}
 
@@ -324,7 +333,7 @@ Shader "Render/CloudShader"
 						
 						opticalDepth += value;
 						
-						result.rgb += light * Beer(opticalDepth);
+						result.rgb += light * BeerLambert(opticalDepth);
 					}
 
 
@@ -334,7 +343,7 @@ Shader "Render/CloudShader"
 					{
 						float4 sky = float4(0.2, 0, 0.5, 1);
 						value = lerp(value, sky, saturate(sample_max_min.x / 10000));
-						return float4(value, value, value,1.0 - Beer(opticalDepth));
+						return float4(value, value, value,1.0 - BeerLambert(opticalDepth));
 					}
 					current_depth += step_length ;
 
@@ -347,7 +356,7 @@ Shader "Render/CloudShader"
 				}
 
 				
-				result.a = 1.0 - Beer(opticalDepth);
+				result.a = 1.0 - BeerLambert(opticalDepth);
 
 				float4 sky = float4(0, 0, 0.5, 1);
 				end = lerp(end, sky, saturate(sample_max_min.x / 5000));
@@ -398,7 +407,7 @@ Shader "Render/CloudShader"
 				float final_cloud = base_cloud_with_coverage;
 
 				//TODO: missing detailed sample
-				return final_cloud;
+				return final_cloud * 10;
 			}
 
 			
@@ -419,7 +428,7 @@ Shader "Render/CloudShader"
 				float3 lightColor = _LightColor0.rgb;
 				
 				float step_num = 6;
-				float stepScale = (_CloudHeightMaxMin.z / step_num);
+				float stepScale = (_CloudHeightMaxMin.z / step_num) * _LightingScale;
 				float3 stepLength =  stepScale * lightDir;
 
 				//float CosThea = dot(eyeRay, lightDir);
@@ -441,10 +450,10 @@ Shader "Render/CloudShader"
 					pos += stepLength;
 				}
 
-				float hg = HenyeyGreenstein(eyeRay, lightDir, 0.7);
-				float light_energy = Beer(densitySum);
+				float hg = HenyeyGreenstein(eyeRay, lightDir, 0.6);
+				float light_energy = BeerLambert(densitySum);
 
-				return lightColor * hg * light_energy * 0.01;
+				return lightColor * light_energy * hg;
 			}
 
 			float4 RayMarchingCloud(float3 eyeRay, float4 bg)
@@ -478,20 +487,20 @@ Shader "Render/CloudShader"
 					if(cloudDensity > 0)
 					{
 						float densityScaled = cloudDensity * stepScale;
-						//3.3.1 sample light for this point
+						//3.3.1 sample light for this point =>ComputeSunColor in 2013 - Real-time Volumetric Rendering Course Notes.pdf
 						float3 lightColor = SampleLight(pos, eyeRay);
 						//3.3.2 blend light color with current depth
 						densitySum += densityScaled;
 						lightColor *= densityScaled;
 
-						final.rgb += lightColor * (1-Beer(densitySum));
+						final.rgb += lightColor * BeerLambert(densitySum) * 0.1;
 					}
 					//if(densitySum > 0.8) break;
 					//3.4 move step_length forward
 					pos += stepLength;
 				}
 				
-				final.a = 1-Beer(densitySum);
+				final.a = 1-BeerLambert(densitySum);
 
 				
 				final = final + (1-final.a) * bg;
