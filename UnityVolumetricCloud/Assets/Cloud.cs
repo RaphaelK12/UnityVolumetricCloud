@@ -27,6 +27,9 @@ public class Cloud : MonoBehaviour {
     private Texture2D _weatherTexture;
 
     [SerializeField]
+    private Texture2D _heightTexture;
+
+    [SerializeField]
     [Range(0, 100)]
     private float _start = 20;
 
@@ -54,6 +57,14 @@ public class Cloud : MonoBehaviour {
     [SerializeField]
     private float lightingScale = 0.01f;
 
+    [SerializeField, Range(0,2)]
+    private float coverageScale = 1.0f;
+
+    [SerializeField]
+    private bool _enableBeer = true;
+    [SerializeField]
+    private bool _enableHG = true;
+
 
     // Use this for initialization
     void Start ()
@@ -73,7 +84,7 @@ public class Cloud : MonoBehaviour {
         this._mat.SetFloat("_CameraNearPlane", this._camera.nearClipPlane);
 
         this._mat.SetTexture("_NoiseTex", this._cloudBaseTexture);
-        //this._mat.SetTexture("_Height", this._height);
+        this._mat.SetTexture("_Height", this._heightTexture);
         this._mat.SetTexture("_Weather", this._weatherTexture);
 
         this._mat.SetFloat("_StartValue", this._start);
@@ -88,6 +99,8 @@ public class Cloud : MonoBehaviour {
         this._mat.SetFloat("_AbsportionCoEff", this.AbsportionCoEff);
         this._mat.SetFloat("_ScatteringCoEff", this.ScatteringCoEff);
         this._mat.SetFloat("_LightingScale", this.lightingScale);
+        this._mat.SetFloat("_CoverageScale", this.coverageScale);
+        
     }
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)
