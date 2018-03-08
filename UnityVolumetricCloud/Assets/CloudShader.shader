@@ -211,7 +211,8 @@ Shader "Render/CloudShader"
 				float low_freq_fBm = (low_frequency_noises.g * 0.625) + (low_frequency_noises.b * 0.25) + (low_frequency_noises.a * 0.125);
 				
 				// define the base cloud shape by dilating it with the low frequency fBm made of Worley noise.
-				float base_cloud = Remap(low_frequency_noises.r, -(1.0 - low_freq_fBm), 1.0, 0.0, 1.0);
+				// here is slightlt different than original code WITHOUT Nagative below
+				float base_cloud = Remap(low_frequency_noises.r, (1.0 - low_freq_fBm), 1.0, 0.0, 1.0);
 
 				//TODO: missing density_height_gradient
 				float density_height_gradient = tex2Dlod(_Height, float4(0, GetHeightFractionForPoint(p, _CloudHeightMaxMin),0,0)).r;
@@ -235,7 +236,7 @@ Shader "Render/CloudShader"
 				float final_cloud = base_cloud_with_coverage;
 
 				//TODO: missing detailed sample
-				return final_cloud * 10;
+				return base_cloud * 10;
 			}
 
 			
@@ -342,7 +343,7 @@ Shader "Render/CloudShader"
 				final.a = 1-BeerLambert(densitySum);				
 
 				float horizonFade = (1.0f - saturate(sampleMaxMin.x / 50000));
-				//final *= horizonFade;
+				final *= horizonFade;
 				
 				final = final + (1-final.a) * bg;
 
