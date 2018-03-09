@@ -213,20 +213,23 @@ Shader "Render/CloudShader"
 				// define the base cloud shape by dilating it with the low frequency fBm made of Worley noise.
 				// here is slightlt different than original code WITHOUT Nagative below
 				float base_cloud = Remap(low_frequency_noises.r, (1.0 - low_freq_fBm), 1.0, 0.0, 1.0);
+				float height_fraction = GetHeightFractionForPoint(p, _CloudHeightMaxMin);
 
 				//TODO: missing density_height_gradient
-				float density_height_gradient = tex2Dlod(_Height, float4(0, GetHeightFractionForPoint(p, _CloudHeightMaxMin),0,0)).r;
+				float density_height_gradient = tex2Dlod(_Height, float4(0, height_fraction,0,0)).r;
 
 				base_cloud *= density_height_gradient;
 
 				//cloud coverage is stored in the weather_data's red channel.
 				float cloud_coverage = weather.r;
 
+				float anvil_bias = 0.3f;
 				// apply anvil deformations
-				//cloud_coverage = pow(cloud_coverage, Remap(height_fraction, 0.7, 0.8, 1.0, lerp(1.0, 0.5, anvil_bias)));
+				cloud_coverage = pow(cloud_coverage, Remap(height_fraction, 0.7, 0.8, 1.0, lerp(1.0, 0.5, anvil_bias)));
 				
 				//Use remapper to apply cloud coverage attribute
-				//cloud_coverage = 0 will do nothing about base_cloud
+				//if cloud_coverage = 0,
+				//it will do nothing about base_cloud value
 				float base_cloud_with_coverage  = Remap(base_cloud, cloud_coverage * _CoverageScale, 1.0, 0.0, 1.0); 
 
 				//Multiply result by cloud coverage so that smaller clouds are lighter and more aesthetically pleasing.
@@ -236,7 +239,7 @@ Shader "Render/CloudShader"
 				float final_cloud = base_cloud_with_coverage;
 
 				//TODO: missing detailed sample
-				return base_cloud * 10;
+				return final_cloud * 10;
 			}
 
 			
@@ -280,7 +283,7 @@ Shader "Render/CloudShader"
 				}
 
 				float hg = HenyeyGreenstein(eyeRay, lightDir, 0.6);
-				float lightEnergy = BeerLambert(densitySum);
+				float lightEnergy = BeerLambert(densitySum) * 0.3;
 				float powder = Powder(densitySum);
 
 				return lightColor * lightEnergy * hg;// * powder;
