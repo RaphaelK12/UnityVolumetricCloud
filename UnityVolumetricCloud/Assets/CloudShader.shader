@@ -44,6 +44,7 @@ Shader "Render/CloudShader"
 			sampler2D _MainTex;
 			sampler2D _Height;
 			sampler2D _Weather;
+			sampler2D _DepthWeather;
 			float4 _MainTex_ST;
 
 			float4 _CameraPosWS;
@@ -61,10 +62,12 @@ Shader "Render/CloudShader"
             float4 _CloudHeightMaxMin;
 
 			//cloud rendering parameters
-			float _AbsportionCoEff;
 			float _ScatteringCoEff;
 
-			float _LightingScale;
+
+			float _LightingStepScale;
+			float _CloudStepScale;
+			float _CloudDensityScale;
 
 			float _CoverageScale;
 			
@@ -179,13 +182,13 @@ Shader "Render/CloudShader"
 			//we can get Transparence from this
 			float BeerLambert(float opticalDepth)
 			{
-				float ExtinctionCoEff = _AbsportionCoEff + _ScatteringCoEff;
+				float ExtinctionCoEff = _ScatteringCoEff;
 				return exp( -ExtinctionCoEff * opticalDepth);
 			}
 
 			float Powder(float opticalDepth)
 			{
-				float ExtinctionCoEff = _AbsportionCoEff + _ScatteringCoEff;
+				float ExtinctionCoEff = _ScatteringCoEff;
 				return 1.0f - exp( - 2 * ExtinctionCoEff * opticalDepth);
 			}
 			
@@ -194,6 +197,7 @@ Shader "Render/CloudShader"
 				const float baseFreq = 1e-5;
 				float2 weather_uv = pos.xz * _WeatherUVScale *baseFreq;
 				return tex2Dlod(_Weather, float4(weather_uv, 0, 0));
+				return tex2Dlod(_DepthWeather, float4(weather_uv, 0, 0));
 			}
 
 			float4 SampleCloudTexture(float3 pos)
@@ -230,7 +234,7 @@ Shader "Render/CloudShader"
 				//Use remapper to apply cloud coverage attribute
 				//if cloud_coverage = 0,
 				//it will do nothing about base_cloud value
-				float base_cloud_with_coverage  = Remap(base_cloud, cloud_coverage * _CoverageScale, 1.0, 0.0, 1.0); 
+				float base_cloud_with_coverage  = Remap(base_cloud, saturate(cloud_coverage * _CoverageScale), 1.0, 0.0, 1.0); 
 
 				//Multiply result by cloud coverage so that smaller clouds are lighter and more aesthetically pleasing.
 				base_cloud_with_coverage *= cloud_coverage;
@@ -239,7 +243,7 @@ Shader "Render/CloudShader"
 				float final_cloud = base_cloud_with_coverage;
 
 				//TODO: missing detailed sample
-				return final_cloud * 10;
+				return saturate(final_cloud * _CloudDensityScale);
 			}
 
 			
@@ -260,7 +264,7 @@ Shader "Render/CloudShader"
 				float3 lightColor = _LightColor0.rgb;
 				
 				float step_num = 6;
-				float stepScale = (_CloudHeightMaxMin.z / step_num) * _LightingScale;
+				float stepScale = _CloudHeightMaxMin.z / step_num * _LightingStepScale;
 				float3 stepLength =  stepScale * lightDir;
 
 				//float CosThea = dot(eyeRay, lightDir);
@@ -283,10 +287,10 @@ Shader "Render/CloudShader"
 				}
 
 				float hg = HenyeyGreenstein(eyeRay, lightDir, 0.6);
-				float lightEnergy = BeerLambert(densitySum) * 0.3;
+				float lightEnergy = BeerLambert(densitySum);
 				float powder = Powder(densitySum);
 
-				return lightColor * lightEnergy * hg;// * powder;
+				return lightColor * hg * lightEnergy * powder;
 			}
 
 			float4 RayMarchingCloud(float3 eyeRay, float4 bg)
@@ -309,7 +313,7 @@ Shader "Render/CloudShader"
 				//TODO: higher eyeRay.y will get lower step num
 				int step_num = 128;
 				float stepScale = (sampleMaxMin.x - sampleMaxMin.y) / step_num; 
-				float3 stepLength = eyeRay * stepScale;
+				float3 stepLength = eyeRay * stepScale * _CloudStepScale;
 
 				float densitySum = 0;
 				float extinction = 1;
@@ -333,7 +337,7 @@ Shader "Render/CloudShader"
 
 						extinction = BeerLambert(densitySum);
 
-						final.rgb += lightColor * extinction * 0.1;
+						final.rgb += lightColor * extinction;
 					}
 					//if(densitySum > 0.8) break;
 					//3.4 move step_length forward
@@ -343,12 +347,12 @@ Shader "Render/CloudShader"
 						break;
 				}
 				
-				final.a = 1-BeerLambert(densitySum);				
+				final.a = saturate(1-BeerLambert(densitySum));				
 
-				float horizonFade = (1.0f - saturate(sampleMaxMin.x / 50000));
+				float horizonFade = (1.0f - saturate(sampleMaxMin.x / 30000));
 				final *= horizonFade;
 				
-				final = final + (1-final.a) * bg;
+				final = final + saturate(1-final.a) * bg;
 
 				return final;
 			}
