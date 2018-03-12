@@ -335,7 +335,7 @@ Shader "Render/CloudShader"
 						densitySum += densityScaled;
 						lightColor *= densityScaled;
 
-						extinction = BeerLambert(densitySum);
+						extinction *= BeerLambert(densityScaled);
 
 						final.rgb += lightColor * extinction;
 					}
@@ -346,8 +346,9 @@ Shader "Render/CloudShader"
 					if(extinction < 0.001) 
 						break;
 				}
+				//final.rgb *= extinction;
 				
-				final.a = saturate(1-BeerLambert(densitySum));				
+				final.a = saturate(1-extinction);				
 
 				float horizonFade = (1.0f - saturate(sampleMaxMin.x / 30000));
 				final *= horizonFade;

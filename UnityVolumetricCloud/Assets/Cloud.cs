@@ -54,7 +54,7 @@ public class Cloud : MonoBehaviour {
     [SerializeField]
     private float ScatteringCoEff = 0.01f;
 
-    [SerializeField, Range(0.0005f, 0.01f)]
+    [SerializeField, Range(0.0005f, 1f)]
     private float _lightingStepScale = 0.01f;
     [SerializeField]
     private float _cloudStepScale = 1f;
