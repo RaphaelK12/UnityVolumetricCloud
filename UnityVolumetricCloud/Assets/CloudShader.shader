@@ -350,7 +350,7 @@ Shader "Render/CloudShader"
 				
 				final.a = saturate(1-extinction);				
 
-				float horizonFade = (1.0f - saturate(sampleMaxMin.x / 30000));
+				float horizonFade = (1.0f - saturate(sampleMaxMin.x / 50000));
 				final *= horizonFade;
 				
 				final = final + saturate(1-final.a) * bg;
