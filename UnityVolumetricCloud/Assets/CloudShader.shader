@@ -56,10 +56,12 @@ Shader "Render/CloudShader"
 			float4x4 _MainCameraInvView;
 
 			sampler3D _NoiseTex;
+			sampler3D _CloudDetailTexture;
 
 			float _StartValue;
 
 			float _CloudBaseUVScale;
+			float _CloudDetailUVScale;
 			float _WeatherUVScale;
 
             float4 _CloudHeightMaxMin;
@@ -177,9 +179,11 @@ Shader "Render/CloudShader"
 				return lerp(_CloudBottomColor, _CloudTopColor, height).rgb * ExtinctionCoEff * 0.01;
 			}
 
-			float PhaseHenyeyGreenStein(float inScatteringAngle, float g)
+			float PhaseHenyeyGreenStein(float cosAngle, float g)
 			{
-				return ((1.0 - g * g) / pow((1.0 + g * g - 2.0 * g * inScatteringAngle), 3.0 / 2.0)) / (4.0 * 3.14159);
+				//return ((1.0 - g * g) / pow((1.0 + g * g - 2.0 * g * inScatteringAngle), 3.0 / 2.0)) / (4.0 * 3.14159);
+				
+				return ((1.0 - g * g ) / (4.0 * 3.1415926f * pow ((1.0 + g * g - 2.0 * g * cosAngle ) , 3.0 / 2.0)));
 			}
 						
 			//this will get In-Scattering term
@@ -207,6 +211,7 @@ Shader "Render/CloudShader"
 			{			
 				const float baseFreq = 1e-5;
 				float2 weather_uv = pos.xz * _WeatherUVScale *baseFreq;
+				weather_uv += 0.7;
 				return tex2Dlod(_Weather, float4(weather_uv, 0, 0));
 				return tex2Dlod(_DepthWeather, float4(weather_uv, 0, 0));
 			}
@@ -216,6 +221,13 @@ Shader "Render/CloudShader"
 				const float baseFreq = 1e-5;
 				pos *= _CloudBaseUVScale * baseFreq;
 				return tex3Dlod(_NoiseTex, float4(pos,0));
+			}
+
+			float4 SampleCloudDetailTexture(float3 pos)
+			{
+				const float baseFreq = 1e-5;
+				pos *= _CloudDetailUVScale * baseFreq;
+				return tex3Dlod(_CloudDetailTexture, float4(pos,0));
 			}
 
 			float SampleCloudDensity(float3 p, float4 weather)
@@ -229,8 +241,10 @@ Shader "Render/CloudShader"
 				// here is slightlt different than original code WITHOUT Nagative below
 				float base_cloud = Remap(low_frequency_noises.r, (1.0 - low_freq_fBm), 1.0, 0.0, 1.0);
 				float height_fraction = GetHeightFractionForPoint(p, _CloudHeightMaxMin);
+				
 
 				//TODO: missing density_height_gradient
+				//TODo: missing wind curl
 				float density_height_gradient = tex2Dlod(_Height, float4(0, height_fraction,0,0)).r;
 
 				base_cloud *= density_height_gradient;
@@ -254,6 +268,23 @@ Shader "Render/CloudShader"
 				float final_cloud = base_cloud_with_coverage;
 
 				//TODO: missing detailed sample
+				if(1)
+				{
+					// sample high-frequency noises
+					float3 high_frequency_noises = SampleCloudDetailTexture(p).rgb;
+
+					// build High frequency Worley noise fBm
+					float high_freq_fBm = ( high_frequency_noises.r * 0.625 ) + ( high_frequency_noises.g * 0.25 ) + ( high_frequency_noises.b * 0.125 );
+
+					// get the height_fraction for use with blending noise types over height
+					float height_fraction  = GetHeightFractionForPoint(p, _CloudHeightMaxMin);
+
+					// transition from wispy shapes to billowy shapes over height
+					float high_freq_noise_modifier = lerp(high_freq_fBm, 1.0 - high_freq_fBm, saturate(height_fraction * 10.0));
+
+					// erode the base cloud shape with the distorted high frequency Worley noises.
+					final_cloud = Remap(base_cloud_with_coverage, high_freq_noise_modifier * 0.2 , 1.0, 0.0, 1.0);
+				}
 				return saturate(final_cloud * _CloudDensityScale);
 			}
 
@@ -278,7 +309,6 @@ Shader "Render/CloudShader"
 				float stepScale = _CloudHeightMaxMin.z / step_num * _LightingStepScale;
 				float3 stepLength =  stepScale * lightDir;
 
-				//float CosThea = dot(eyeRay, lightDir);
 				
 				float densitySum = 0.0;
 
@@ -296,12 +326,22 @@ Shader "Render/CloudShader"
 
 					pos += stepLength;
 				}
+				
+				float cosThea = dot(eyeRay, lightDir);
+				float HG = 0.6;
+				float hgForward = PhaseHenyeyGreenStein(cosThea, HG);
+				float hgBackward = PhaseHenyeyGreenStein(cosThea, 0.99 - HG);
 
-				float hg = HenyeyGreenstein(eyeRay, lightDir, 0.6);
-				float lightEnergy = BeerLambert(densitySum);
+				float hgTotal = max(hgForward, hgBackward);
+				
+				float lightEnergy1 = BeerLambert(densitySum);
+				float lightEnergy2 = BeerLambert(densitySum*0.25)*0.7;
+
+				float lightEnergy = max(lightEnergy1,lightEnergy2);
+
 				float powder = Powder(densitySum);
 
-				return lightColor * hg * lightEnergy * powder;
+				return lightColor * hgTotal * lightEnergy * powder;
 			}
 
 			float4 RayMarchingCloud(float3 eyeRay, float4 bg)

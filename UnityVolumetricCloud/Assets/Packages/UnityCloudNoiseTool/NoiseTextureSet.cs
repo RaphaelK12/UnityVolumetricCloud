@@ -23,6 +23,7 @@ public class NoiseTextureSet : MonoBehaviour {
         int currentOffset = 0;
         for (int i = 0; i < _textures.Count; ++i)
         {
+            if (this._textures[i] == null) continue;
             Vector2 pos = new Vector2(currentOffset, YOffset);
             this._textures[i].Draw(pos);
             currentOffset += this._textures[i].Resolution;

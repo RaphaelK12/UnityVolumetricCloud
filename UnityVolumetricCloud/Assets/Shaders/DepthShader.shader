@@ -53,7 +53,7 @@
 				UNITY_APPLY_FOG(i.fogCoord, col);
 				float depth = UNITY_SAMPLE_DEPTH(tex2D(_CameraDepthTexture, i.uv));
 				//depth = LinearEyeDepth(depth);
-				//depth = 1-Linear01Depth(depth);
+				depth = 1-Linear01Depth(depth);
 				return fixed4(depth,depth,depth,1);
 			}
 			ENDCG

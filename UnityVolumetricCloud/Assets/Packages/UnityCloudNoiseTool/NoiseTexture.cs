@@ -325,6 +325,8 @@ public class NoiseTexture : MonoBehaviour
         AssetDatabase.CreateAsset(asset, assetPathName);
         AssetDatabase.AddObjectToAsset(this._texture, asset);
 
+        this._texture.name = this._fileName;
+
         asset.UpdateField(this._dimensions, this._fractal, this._resolution, this._frequency, this._revert, this._texture, this._type);
 
         // Save the generated mesh asset.

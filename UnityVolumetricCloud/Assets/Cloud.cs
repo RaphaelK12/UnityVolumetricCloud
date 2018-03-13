@@ -22,7 +22,9 @@ public class Cloud : MonoBehaviour {
 
     [SerializeField]
     private Texture3D _cloudBaseTexture;
-    
+    [SerializeField]
+    private Texture3D _cloudDetailTexture;
+
     [SerializeField]
     private Texture2D _weatherTexture;
 
@@ -45,6 +47,8 @@ public class Cloud : MonoBehaviour {
 
     [SerializeField]
     private float _cloudBaseUVScale = 5;
+    [SerializeField]
+    private float _cloudDetailUVScale = 5;
 
     [SerializeField]
     private float _weatherUVScale = 1;
@@ -97,6 +101,8 @@ public class Cloud : MonoBehaviour {
         this._mat.SetFloat("_CameraNearPlane", this._camera.nearClipPlane);
 
         this._mat.SetTexture("_NoiseTex", this._cloudBaseTexture);
+        this._mat.SetTexture("_CloudDetailTexture", this._cloudDetailTexture);
+        
         this._mat.SetTexture("_Height", this._heightTexture);
         this._mat.SetTexture("_Weather", this._weatherTexture);
         this._mat.SetTexture("_DepthWeather", this._depthTarget.renderTexture);
@@ -108,6 +114,7 @@ public class Cloud : MonoBehaviour {
 
 
         this._mat.SetFloat("_CloudBaseUVScale", this._cloudBaseUVScale);
+        this._mat.SetFloat("_CloudDetailUVScale", this._cloudDetailUVScale); 
         this._mat.SetFloat("_WeatherUVScale", this._weatherUVScale);
 
         this._mat.SetFloat("_AbsportionCoEff", this.AbsportionCoEff);
