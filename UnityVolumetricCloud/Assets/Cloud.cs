@@ -66,6 +66,11 @@ public class Cloud : MonoBehaviour {
     private float cloudDensityScale = 1;
 
     [SerializeField]
+    private Color _cloudTopColor;
+    [SerializeField]
+    private Color _cloudBottomColor;
+
+    [SerializeField]
     private bool _enableBeer = true;
     [SerializeField]
     private bool _enableHG = true;
@@ -111,7 +116,10 @@ public class Cloud : MonoBehaviour {
         this._mat.SetFloat("_CloudStepScale", this._cloudStepScale);
         this._mat.SetFloat("_CoverageScale", this.coverageScale);
         this._mat.SetFloat("_CloudDensityScale", this.cloudDensityScale);
-        
+
+        this._mat.SetVector("_CloudTopColor", this._cloudTopColor);
+        this._mat.SetVector("_CloudBottomColor", this._cloudBottomColor);
+
     }
 
     private void OnRenderImage(RenderTexture source, RenderTexture destination)

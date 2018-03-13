@@ -41,6 +41,9 @@ Shader "Render/CloudShader"
 				float4 dir_ws	: TEXCOORD0;
 			};
 
+			float4 _CloudTopColor;
+			float4 _CloudBottomColor;
+
 			sampler2D _MainTex;
 			sampler2D _Height;
 			sampler2D _Weather;
@@ -164,6 +167,14 @@ Shader "Render/CloudShader"
 				float height_fraction = (inPosition.y - inCloudMaxMin.y) / (inCloudMaxMin.x - inCloudMaxMin.y);
 
 				return saturate(height_fraction);
+			}
+
+			float3 GetAmbientColor(float3 position)
+			{
+				return (float3)0;
+				float ExtinctionCoEff = _ScatteringCoEff;
+				float height = GetHeightFractionForPoint(position, _CloudHeightMaxMin);
+				return lerp(_CloudBottomColor, _CloudTopColor, height).rgb * ExtinctionCoEff * 0.01;
 			}
 
 			float PhaseHenyeyGreenStein(float inScatteringAngle, float g)
@@ -328,6 +339,7 @@ Shader "Render/CloudShader"
 					//3.3 if noise value > 0
 					if(cloudDensity > 0)
 					{
+						float3 ambientColor = GetAmbientColor(pos) * stepScale;
 						float densityScaled = cloudDensity * stepScale;
 						//3.3.1 sample light for this point =>ComputeSunColor in 2013 - Real-time Volumetric Rendering Course Notes.pdf
 						float3 lightColor = SampleLight(pos, eyeRay);
@@ -337,7 +349,7 @@ Shader "Render/CloudShader"
 
 						extinction *= BeerLambert(densityScaled);
 
-						final.rgb += lightColor * extinction;
+						final.rgb += (ambientColor + lightColor) * extinction;
 					}
 					//if(densitySum > 0.8) break;
 					//3.4 move step_length forward
