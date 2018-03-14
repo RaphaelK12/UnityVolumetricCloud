@@ -29,7 +29,11 @@ public class Cloud : MonoBehaviour {
     private Texture2D _weatherTexture;
 
     [SerializeField]
-    private Texture2D _heightTexture;
+    private Texture2D _heightTexture1;
+    [SerializeField]
+    private Texture2D _heightTexture2;
+    [SerializeField]
+    private Texture2D _heightTexture3;
 
     [SerializeField]
     [Range(0, 100)]
@@ -102,8 +106,11 @@ public class Cloud : MonoBehaviour {
 
         this._mat.SetTexture("_NoiseTex", this._cloudBaseTexture);
         this._mat.SetTexture("_CloudDetailTexture", this._cloudDetailTexture);
-        
-        this._mat.SetTexture("_Height", this._heightTexture);
+
+        this._mat.SetTexture("_HeightType1", this._heightTexture1);
+        this._mat.SetTexture("_HeightType2", this._heightTexture2);
+        this._mat.SetTexture("_HeightType3", this._heightTexture3);
+
         this._mat.SetTexture("_Weather", this._weatherTexture);
         this._mat.SetTexture("_DepthWeather", this._depthTarget.renderTexture);
 

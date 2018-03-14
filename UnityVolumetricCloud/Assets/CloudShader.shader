@@ -45,7 +45,9 @@ Shader "Render/CloudShader"
 			float4 _CloudBottomColor;
 
 			sampler2D _MainTex;
-			sampler2D _Height;
+			sampler2D _HeightType1;
+			sampler2D _HeightType2;
+			sampler2D _HeightType3;
 			sampler2D _Weather;
 			sampler2D _DepthWeather;
 			float4 _MainTex_ST;
@@ -166,10 +168,41 @@ Shader "Render/CloudShader"
 			float GetHeightFractionForPoint(float3 inPosition, float2 inCloudMaxMin)
 			{
 				// get global fractional position in cloud zone
-				float height_fraction = (inPosition.y - inCloudMaxMin.y) / (inCloudMaxMin.x - inCloudMaxMin.y);
+				float heightFraction = (inPosition.y - inCloudMaxMin.y) / (inCloudMaxMin.x - inCloudMaxMin.y);
 
-				return saturate(height_fraction);
+				return saturate(heightFraction);
 			}
+
+			//this function will retrun how much cloud
+			//should be remained in this heightFraction with this cloudType
+			float GetHeightFractionFromFraction(float heightFraction, float cloudType)
+			{
+				//return tex2Dlod(_HeightType1, float4(0, heightFraction,0,0)).r;
+				heightFraction = clamp(heightFraction, 0, 1);
+				float h1 = tex2Dlod(_HeightType1, float4(0, heightFraction,0,0)).r;
+				float h2 = tex2Dlod(_HeightType2, float4(0, heightFraction,0,0)).r;
+				float h3 = tex2Dlod(_HeightType3, float4(0, heightFraction,0,0)).r;
+
+				float h12 = lerp(h1, h2, saturate(cloudType * 2));
+				float h23 = lerp(h2, h3, saturate((cloudType - 0.5) * 2));
+
+				return lerp(h12,h23,cloudType);
+			}
+
+			//another cloudLayerDensity function from https://github.com/mccannd/Project-Marshmallow
+			//same but without sampling texture
+			float cloudLayerDensity(float relativeHeight, float cloudType) 
+			{
+				relativeHeight = clamp(relativeHeight, 0, 1);
+    
+				float cumulus = max(0.0, Remap(relativeHeight, 0.0, 0.2, 0.0, 1.0) * Remap(relativeHeight, 0.7, 0.9, 1.0, 0.0));
+				float stratocumulus = max(0.0, Remap(relativeHeight, 0.0, 0.2, 0.0, 1.0) * Remap(relativeHeight, 0.2, 0.7, 1.0, 0.0)); 
+				float stratus = max(0.0, Remap(relativeHeight, 0.0, 0.1, 0.0, 1.0) * Remap(relativeHeight, 0.2, 0.3, 1.0, 0.0)); 
+
+				float d1 = lerp(stratus, stratocumulus, clamp(cloudType * 2.0, 0.0, 1.0));
+				float d2 = lerp(stratocumulus, cumulus, clamp((cloudType - 0.5) * 2.0, 0.0, 1.0));
+				return lerp(d1, d2, cloudType);
+    		}
 
 			float3 GetAmbientColor(float3 position)
 			{
@@ -230,6 +263,8 @@ Shader "Render/CloudShader"
 				return tex3Dlod(_CloudDetailTexture, float4(pos,0));
 			}
 
+
+
 			float SampleCloudDensity(float3 p, float4 weather)
 			{				
 				//Sample base shape
@@ -245,7 +280,7 @@ Shader "Render/CloudShader"
 
 				//TODO: missing density_height_gradient
 				//TODo: missing wind curl
-				float density_height_gradient = tex2Dlod(_Height, float4(0, height_fraction,0,0)).r;
+				float density_height_gradient = GetHeightFractionFromFraction(height_fraction, weather.b);
 
 				base_cloud *= density_height_gradient;
 
