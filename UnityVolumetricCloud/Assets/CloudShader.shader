@@ -59,12 +59,14 @@ Shader "Render/CloudShader"
 
 			sampler3D _NoiseTex;
 			sampler3D _CloudDetailTexture;
+			sampler2D _CurlNoiseTexture;
 
 			float _StartValue;
 
 			float _CloudBaseUVScale;
 			float _CloudDetailUVScale;
 			float _WeatherUVScale;
+			float _CurlNoiseUVScale;
 
             float4 _CloudHeightMaxMin;
 
@@ -159,7 +161,7 @@ Shader "Render/CloudShader"
 			// Utility function that maps a value from one range to another.
 			float Remap(float original_value, float original_min, float original_max, float new_min, float new_max)
 			{
-				if(original_max == original_min) return original_value;
+				if(original_max == original_min) return new_min;
 				return new_min + (((original_value - original_min) / (original_max - original_min)) * (new_max - new_min));
 			}
 
@@ -263,6 +265,13 @@ Shader "Render/CloudShader"
 				return tex3Dlod(_CloudDetailTexture, float4(pos,0));
 			}
 
+			float4 SampleCloudCurlTexture(float3 pos)
+			{
+				const float baseFreq = 1;
+				pos *= _CurlNoiseUVScale * baseFreq;
+				return tex2Dlod(_CurlNoiseTexture, float4(pos,0));
+			}
+
 
 
 			float SampleCloudDensity(float3 p, float4 weather)
@@ -278,9 +287,27 @@ Shader "Render/CloudShader"
 				float height_fraction = GetHeightFractionForPoint(p, _CloudHeightMaxMin);
 				
 
-				//TODO: missing density_height_gradient
-				//TODo: missing wind curl
+				//DONE: missing density_height_gradient
 				float density_height_gradient = GetHeightFractionFromFraction(height_fraction, weather.b);
+
+				{
+					//========================================================
+					//Wind part
+					//DONE: missing wind
+					// wind settings
+					float3 wind_direction = float3(1.0, 0.0, 0.0);
+					float cloud_speed = 1000.0;
+
+					// cloud_top offset - push the tops of the clouds along this wind direction by this many units.
+					float cloud_top_offset = 500.0;
+
+					// skew in wind direction
+					p += height_fraction * wind_direction * cloud_top_offset;
+
+					//animate clouds in wind direction and add a small upward bias to the wind direction
+					p+= (wind_direction + float3(0.0, 0.1, 0.0)  ) * _Time * cloud_speed;
+					//=========================================================
+				}
 
 				base_cloud *= density_height_gradient;
 
@@ -294,17 +321,35 @@ Shader "Render/CloudShader"
 				//Use remapper to apply cloud coverage attribute
 				//if cloud_coverage = 0,
 				//it will do nothing about base_cloud value
-				float base_cloud_with_coverage  = Remap(base_cloud, saturate(cloud_coverage * _CoverageScale), 1.0, 0.0, 1.0); 
+				//resrict cloud_coverage value in the range of base_cloud
+				//float base_cloud_with_coverage  = Remap(base_cloud, cloud_coverage, 1.0, 0.0, 1.0); 
 
+
+				// I remove the following two lines because I want to map coverage(_CoverageScale value from 0 to 2)
+				//from 0 to texture's cloud_coverage then to base_cloud value
+				float base_cloud_with_coverage  = Remap(base_cloud, cloud_coverage*_CoverageScale, 1.0, 0.0, 1.0); 
 				//Multiply result by cloud coverage so that smaller clouds are lighter and more aesthetically pleasing.
 				base_cloud_with_coverage *= cloud_coverage;
+				
+
+				if(1)
+				{
+					//_CoverageScale in range (0,1) will change texture_coverage;
+					//_CoverageScale in range (1,2) will get over_all value from texture_coverage to 1;
+					float texture_coverage = lerp(0, cloud_coverage, saturate(_CoverageScale));
+					base_cloud_with_coverage = base_cloud * (texture_coverage + saturate(_CoverageScale-1));
+				}
 
 				//define final cloud value
 				float final_cloud = base_cloud_with_coverage;
 
-				//TODO: missing detailed sample
+				//DONE: detailed sample
 				if(1)
 				{
+					// add some turbulence to bottoms of clouds using curl noise.  Ramp the effect down over height and scale it by some value (200 in this example)
+					float2 curl_noise =  SampleCloudCurlTexture(float3(p.x, p.y, 0.0)).rg;
+					p.xy += curl_noise.rg * (1.0 - height_fraction) * 200.0;
+
 					// sample high-frequency noises
 					float3 high_frequency_noises = SampleCloudDetailTexture(p).rgb;
 

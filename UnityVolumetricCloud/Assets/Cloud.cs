@@ -24,6 +24,8 @@ public class Cloud : MonoBehaviour {
     private Texture3D _cloudBaseTexture;
     [SerializeField]
     private Texture3D _cloudDetailTexture;
+    [SerializeField]
+    private Texture2D _curlNoiseTexture;
 
     [SerializeField]
     private Texture2D _weatherTexture;
@@ -53,6 +55,9 @@ public class Cloud : MonoBehaviour {
     private float _cloudBaseUVScale = 5;
     [SerializeField]
     private float _cloudDetailUVScale = 5;
+
+    [SerializeField]
+    private float _curlNoiseUVScale = 1;
 
     [SerializeField]
     private float _weatherUVScale = 1;
@@ -106,6 +111,7 @@ public class Cloud : MonoBehaviour {
 
         this._mat.SetTexture("_NoiseTex", this._cloudBaseTexture);
         this._mat.SetTexture("_CloudDetailTexture", this._cloudDetailTexture);
+        this._mat.SetTexture("_CurlNoiseTexture", this._curlNoiseTexture);
 
         this._mat.SetTexture("_HeightType1", this._heightTexture1);
         this._mat.SetTexture("_HeightType2", this._heightTexture2);
@@ -123,6 +129,7 @@ public class Cloud : MonoBehaviour {
         this._mat.SetFloat("_CloudBaseUVScale", this._cloudBaseUVScale);
         this._mat.SetFloat("_CloudDetailUVScale", this._cloudDetailUVScale); 
         this._mat.SetFloat("_WeatherUVScale", this._weatherUVScale);
+        this._mat.SetFloat("_CurlNoiseUVScale", this._curlNoiseUVScale);
 
         this._mat.SetFloat("_AbsportionCoEff", this.AbsportionCoEff);
         this._mat.SetFloat("_ScatteringCoEff", this.ScatteringCoEff);
