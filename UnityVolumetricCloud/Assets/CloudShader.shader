@@ -232,7 +232,9 @@ Shader "Render/CloudShader"
 			//we can get Transparence from this
 			float BeerLambert(float opticalDepth)
 			{
-				float ExtinctionCoEff = _ScatteringCoEff;
+				//original paper add a rain parameter here
+				//to make a darker clooud for weather texture's g chanel
+				float ExtinctionCoEff = _ScatteringCoEff; // * weather.g
 				return exp( -ExtinctionCoEff * opticalDepth);
 			}
 
@@ -414,6 +416,7 @@ Shader "Render/CloudShader"
 
 				float hgTotal = max(hgForward, hgBackward);
 				
+				//add parameter here to make cloud lighter
 				float lightEnergy1 = BeerLambert(densitySum);
 				float lightEnergy2 = BeerLambert(densitySum*0.25)*0.7;
 
@@ -421,7 +424,7 @@ Shader "Render/CloudShader"
 
 				float powder = Powder(densitySum);
 
-				return lightColor * hgTotal * lightEnergy * powder;
+				return lightColor* lightEnergy * hgTotal * powder;
 			}
 
 			float4 RayMarchingCloud(float3 eyeRay, float4 bg)
