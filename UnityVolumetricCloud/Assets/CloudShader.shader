@@ -72,6 +72,10 @@ Shader "Render/CloudShader"
 
 			//cloud rendering parameters
 			float _ScatteringCoEff;
+			float _HG;
+
+			float _SilverIntensity;
+			float _SilverSpread;
 
 
 			float _LightingStepScale;
@@ -298,7 +302,7 @@ Shader "Render/CloudShader"
 					//DONE: missing wind
 					// wind settings
 					float3 wind_direction = float3(1.0, 0.0, 0.0);
-					float cloud_speed = 1000.0;
+					float cloud_speed = 500.0;
 
 					// cloud_top offset - push the tops of the clouds along this wind direction by this many units.
 					float cloud_top_offset = 500.0;
@@ -410,9 +414,8 @@ Shader "Render/CloudShader"
 				}
 				
 				float cosThea = dot(eyeRay, lightDir);
-				float HG = 0.6;
-				float hgForward = PhaseHenyeyGreenStein(cosThea, HG);
-				float hgBackward = PhaseHenyeyGreenStein(cosThea, 0.99 - HG);
+				float hgForward = PhaseHenyeyGreenStein(cosThea, _HG);
+				float hgBackward = PhaseHenyeyGreenStein(cosThea, 0.99 - _SilverSpread) * _SilverIntensity;
 
 				float hgTotal = max(hgForward, hgBackward);
 				

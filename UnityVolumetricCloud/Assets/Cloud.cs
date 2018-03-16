@@ -64,8 +64,16 @@ public class Cloud : MonoBehaviour {
 
     [SerializeField]
     private float AbsportionCoEff = 0;
-    [SerializeField]
+    [SerializeField, Range(0.01f, 0.5f)]
     private float ScatteringCoEff = 0.01f;
+
+    [SerializeField, Range(0.01f, 0.9f)]
+    private float _hg = 0.6f;
+
+    [SerializeField, Range(0.01f, 5f)]
+    private float _silverIntensity = 1f;
+    [SerializeField, Range(0.01f, 1f)]
+    private float _silverSpread = 0.6f;
 
     [SerializeField, Range(0.0005f, 1f)]
     private float _lightingStepScale = 0.01f;
@@ -133,6 +141,10 @@ public class Cloud : MonoBehaviour {
 
         this._mat.SetFloat("_AbsportionCoEff", this.AbsportionCoEff);
         this._mat.SetFloat("_ScatteringCoEff", this.ScatteringCoEff);
+        this._mat.SetFloat("_HG", this._hg);
+        this._mat.SetFloat("_SilverIntensity", this._silverIntensity);
+        this._mat.SetFloat("_SilverSpread", this._silverSpread);
+
         this._mat.SetFloat("_LightingStepScale", this._lightingStepScale);
         this._mat.SetFloat("_CloudStepScale", this._cloudStepScale);
         this._mat.SetFloat("_CoverageScale", this.coverageScale);
