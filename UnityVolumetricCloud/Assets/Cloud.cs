@@ -96,6 +96,9 @@ public class Cloud : MonoBehaviour {
     [SerializeField]
     private bool _enableHG = true;
 
+    [SerializeField]
+    private Vector4 _textureBias = new Vector4(1,1,1,0);
+
 
     [SerializeField]
     private ObjectProjection _depthTarget;
@@ -152,6 +155,8 @@ public class Cloud : MonoBehaviour {
 
         this._mat.SetVector("_CloudTopColor", this._cloudTopColor);
         this._mat.SetVector("_CloudBottomColor", this._cloudBottomColor);
+
+        this._mat.SetVector("_CloudNoiseBias", this._textureBias);
 
     }
 

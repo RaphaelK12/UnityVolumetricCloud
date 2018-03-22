@@ -83,6 +83,8 @@ Shader "Render/CloudShader"
 			float _CloudDensityScale;
 
 			float _CoverageScale;
+
+			float4 _CloudNoiseBias;
 			
 			
 			v2f vert (vIn v)
@@ -252,7 +254,7 @@ Shader "Render/CloudShader"
 			{			
 				const float baseFreq = 1e-5;
 				float2 weather_uv = pos.xz * _WeatherUVScale *baseFreq;
-				weather_uv += 0.7;
+				weather_uv += 0.8;
 				return tex2Dlod(_Weather, float4(weather_uv, 0, 0));
 				return tex2Dlod(_DepthWeather, float4(weather_uv, 0, 0));
 			}
@@ -260,7 +262,7 @@ Shader "Render/CloudShader"
 			float4 SampleCloudTexture(float3 pos)
 			{
 				const float baseFreq = 1e-5;
-				pos *= _CloudBaseUVScale * baseFreq;
+				pos *= _CloudBaseUVScale * baseFreq * _CloudNoiseBias.xyz;
 				return tex3Dlod(_NoiseTex, float4(pos,0));
 			}
 
@@ -330,20 +332,22 @@ Shader "Render/CloudShader"
 				//resrict cloud_coverage value in the range of base_cloud
 				//float base_cloud_with_coverage  = Remap(base_cloud, cloud_coverage, 1.0, 0.0, 1.0); 
 
+				float base_cloud_with_coverage  = 0;
 
-				// I remove the following two lines because I want to map coverage(_CoverageScale value from 0 to 2)
-				//from 0 to texture's cloud_coverage then to base_cloud value
-				float base_cloud_with_coverage  = Remap(base_cloud, cloud_coverage*_CoverageScale, 1.0, 0.0, 1.0); 
-				//Multiply result by cloud coverage so that smaller clouds are lighter and more aesthetically pleasing.
-				base_cloud_with_coverage *= cloud_coverage;
-				
-
-				if(1)
+				if(1)//this will have more control on cloud coverage than code in else cluase.
 				{
 					//_CoverageScale in range (0,1) will change texture_coverage;
 					//_CoverageScale in range (1,2) will get over_all value from texture_coverage to 1;
 					float texture_coverage = lerp(0, cloud_coverage, saturate(_CoverageScale));
 					base_cloud_with_coverage = base_cloud * (texture_coverage + saturate(_CoverageScale-1));
+				}
+				else
+				{				
+					// I do not use the following two lines because I want to map coverage(_CoverageScale value from 0 to 2)
+					//from 0 to texture's cloud_coverage then to base_cloud value
+					base_cloud_with_coverage = Remap(base_cloud, cloud_coverage*_CoverageScale, 1.0, 0.0, 1.0); 
+					//Multiply result by cloud coverage so that smaller clouds are lighter and more aesthetically pleasing.
+					base_cloud_with_coverage *= cloud_coverage;
 				}
 
 				//define final cloud value
@@ -391,6 +395,7 @@ Shader "Render/CloudShader"
 				float3 lightDir = _WorldSpaceLightPos0.xyz;
 				float3 lightColor = _LightColor0.rgb;
 				
+				//sample 6 points for lighting
 				float step_num = 6;
 				float stepScale = _CloudHeightMaxMin.z / step_num * _LightingStepScale;
 				float3 stepLength =  stepScale * lightDir;
@@ -413,6 +418,8 @@ Shader "Render/CloudShader"
 					pos += stepLength;
 				}
 				
+				//use 2 hg function to avoid dark part of cloud
+				//as course note indicates.
 				float cosThea = dot(eyeRay, lightDir);
 				float hgForward = PhaseHenyeyGreenStein(cosThea, _HG);
 				float hgBackward = PhaseHenyeyGreenStein(cosThea, 0.99 - _SilverSpread) * _SilverIntensity;
@@ -425,6 +432,7 @@ Shader "Render/CloudShader"
 
 				float lightEnergy = max(lightEnergy1,lightEnergy2);
 
+				//Powder effect term
 				float powder = Powder(densitySum);
 
 				return lightColor* lightEnergy * hgTotal * powder;
@@ -452,7 +460,7 @@ Shader "Render/CloudShader"
 				float stepScale = (sampleMaxMin.x - sampleMaxMin.y) / step_num; 
 				float3 stepLength = eyeRay * stepScale * _CloudStepScale;
 
-				float densitySum = 0;
+				float densitySum = 0;// not used
 				float extinction = 1;
 
 				//3.start raymarcing for loop
@@ -477,7 +485,6 @@ Shader "Render/CloudShader"
 
 						final.rgb += (ambientColor + lightColor) * extinction;
 					}
-					//if(densitySum > 0.8) break;
 					//3.4 move step_length forward
 					pos += stepLength;
 
