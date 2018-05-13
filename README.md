@@ -4,5 +4,6 @@ This is a Unity implementation of The Real-time Volumetric Cloudscapes of Horizo
 
 [This](https://github.com/vanish87/UnityCloudNoiseTool) is the noise tool I wrote and used for this project.
 
-![](https://i.gyazo.com/80dd066455da517407d108f2643ea7b1.gif)
-![](https://i.gyazo.com/9efb432a872931ac9e1646677522eca4.gif)
+[![https://gyazo.com/6834b5aa42688438fc5a071181399b2e](https://i.gyazo.com/6834b5aa42688438fc5a071181399b2e.gif)](https://gyazo.com/6834b5aa42688438fc5a071181399b2e)
+
+[![https://gyazo.com/151b7019e5ba8629056fe4566a324028](https://i.gyazo.com/151b7019e5ba8629056fe4566a324028.gif)](https://gyazo.com/151b7019e5ba8629056fe4566a324028)
