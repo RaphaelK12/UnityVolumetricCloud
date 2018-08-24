@@ -64,8 +64,12 @@ public class Cloud : MonoBehaviour {
 
     [SerializeField]
     private float AbsportionCoEff = 0;
-    [SerializeField, Range(0.01f, 0.5f)]
+    [SerializeField, Range(0.01f, 1f)]
     private float ScatteringCoEff = 0.01f;
+    [SerializeField, Range(0f, 1f)]
+    private float PowderCoEff = 0.01f;
+    [SerializeField, Range(0f, 1f)]
+    private float PowderScale = 1f;
 
     [SerializeField, Range(0.01f, 0.9f)]
     private float _hg = 0.6f;
@@ -97,7 +101,9 @@ public class Cloud : MonoBehaviour {
     private bool _enableHG = true;
 
     [SerializeField]
-    private Vector4 _textureBias = new Vector4(1,1,1,0);
+    private Vector4 _textureBias = new Vector4(1, 1, 1, 0);
+    [SerializeField, Range(0, 1)]
+    private float _anvilBias = 0.3f;
 
 
     [SerializeField]
@@ -144,6 +150,8 @@ public class Cloud : MonoBehaviour {
 
         this._mat.SetFloat("_AbsportionCoEff", this.AbsportionCoEff);
         this._mat.SetFloat("_ScatteringCoEff", this.ScatteringCoEff);
+        this._mat.SetFloat("_PowderCoEff", this.PowderCoEff);
+        this._mat.SetFloat("_PowderScale", this.PowderScale); 
         this._mat.SetFloat("_HG", this._hg);
         this._mat.SetFloat("_SilverIntensity", this._silverIntensity);
         this._mat.SetFloat("_SilverSpread", this._silverSpread);
@@ -157,6 +165,7 @@ public class Cloud : MonoBehaviour {
         this._mat.SetVector("_CloudBottomColor", this._cloudBottomColor);
 
         this._mat.SetVector("_CloudNoiseBias", this._textureBias);
+        this._mat.SetFloat("_AnvilBias", this._anvilBias);
 
     }
 
