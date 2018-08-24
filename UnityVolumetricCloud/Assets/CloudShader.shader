@@ -72,6 +72,8 @@ Shader "Render/CloudShader"
 
 			//cloud rendering parameters
 			float _ScatteringCoEff;
+			float _PowderCoEff;
+			float _PowderScale;
 			float _HG;
 
 			float _SilverIntensity;
@@ -83,6 +85,7 @@ Shader "Render/CloudShader"
 			float _CloudDensityScale;
 
 			float _CoverageScale;
+			float _AnvilBias;
 
 			float4 _CloudNoiseBias;
 			
@@ -167,7 +170,7 @@ Shader "Render/CloudShader"
 			// Utility function that maps a value from one range to another.
 			float Remap(float original_value, float original_min, float original_max, float new_min, float new_max)
 			{
-				if(original_max == original_min) return new_min;
+				if(abs(original_max - original_min)<10e-5) return new_min;
 				return new_min + (((original_value - original_min) / (original_max - original_min)) * (new_max - new_min));
 			}
 
@@ -222,8 +225,7 @@ Shader "Render/CloudShader"
 
 			float PhaseHenyeyGreenStein(float cosAngle, float g)
 			{
-				//return ((1.0 - g * g) / pow((1.0 + g * g - 2.0 * g * inScatteringAngle), 3.0 / 2.0)) / (4.0 * 3.14159);
-				
+				//return ((1.0 - g * g) / pow((1.0 + g * g - 2.0 * g * inScatteringAngle), 3.0 / 2.0)) / (4.0 * 3.14159);				
 				return ((1.0 - g * g ) / (4.0 * 3.1415926f * pow ((1.0 + g * g - 2.0 * g * cosAngle ) , 3.0 / 2.0)));
 			}
 						
@@ -246,8 +248,8 @@ Shader "Render/CloudShader"
 
 			float Powder(float opticalDepth)
 			{
-				float ExtinctionCoEff = _ScatteringCoEff;
-				return 1.0f - exp( - 2 * ExtinctionCoEff * opticalDepth);
+				float ExtinctionCoEff = _PowderCoEff;
+				return _PowderScale >0?(1.0f - exp( - 2 * ExtinctionCoEff * opticalDepth)) * _PowderScale:1;
 			}
 			
 			float4 SampleWeatherTexture(float3 pos)
@@ -292,39 +294,18 @@ Shader "Render/CloudShader"
 				// define the base cloud shape by dilating it with the low frequency fBm made of Worley noise.
 				// here is slightlt different than original code WITHOUT Nagative below
 				float base_cloud = Remap(low_frequency_noises.r, (1.0 - low_freq_fBm), 1.0, 0.0, 1.0);
-				float height_fraction = GetHeightFractionForPoint(p, _CloudHeightMaxMin);
-				
+				float height_fraction = GetHeightFractionForPoint(p, _CloudHeightMaxMin);				
 
 				//DONE: missing density_height_gradient
 				float density_height_gradient = GetHeightFractionFromFraction(height_fraction, weather.b);
-
-				{
-					//========================================================
-					//Wind part
-					//DONE: missing wind
-					// wind settings
-					float3 wind_direction = float3(1.0, 0.0, 0.0);
-					float cloud_speed = 500.0;
-
-					// cloud_top offset - push the tops of the clouds along this wind direction by this many units.
-					float cloud_top_offset = 500.0;
-
-					// skew in wind direction
-					p += height_fraction * wind_direction * cloud_top_offset;
-
-					//animate clouds in wind direction and add a small upward bias to the wind direction
-					p+= (wind_direction + float3(0.0, 0.1, 0.0)  ) * _Time * cloud_speed;
-					//=========================================================
-				}
-
+				
 				base_cloud *= density_height_gradient;
 
 				//cloud coverage is stored in the weather_data's red channel.
 				float cloud_coverage = weather.r;
 
-				float anvil_bias = 0.3f;
 				// apply anvil deformations
-				cloud_coverage = pow(cloud_coverage, Remap(height_fraction, 0.7, 0.8, 1.0, lerp(1.0, 0.5, anvil_bias)));
+				cloud_coverage = pow(cloud_coverage, Remap(height_fraction, 0.7, 0.8, 1.0, lerp(1.0, 0.5, _AnvilBias)));
 				
 				//Use remapper to apply cloud coverage attribute
 				//if cloud_coverage = 0,
@@ -345,7 +326,8 @@ Shader "Render/CloudShader"
 				{				
 					// I do not use the following two lines because I want to map coverage(_CoverageScale value from 0 to 2)
 					//from 0 to texture's cloud_coverage then to base_cloud value
-					base_cloud_with_coverage = Remap(base_cloud, cloud_coverage*_CoverageScale, 1.0, 0.0, 1.0); 
+					base_cloud_with_coverage = Remap(base_cloud, saturate(cloud_coverage ), 1.0, 0.0, 1.0);
+					//base_cloud_with_coverage = base_cloud_with_coverage > 0 ? base_cloud_with_coverage : cloud_coverage;
 					//Multiply result by cloud coverage so that smaller clouds are lighter and more aesthetically pleasing.
 					base_cloud_with_coverage *= cloud_coverage;
 				}
@@ -356,6 +338,26 @@ Shader "Render/CloudShader"
 				//DONE: detailed sample
 				if(1)
 				{
+
+					{
+						//========================================================
+						//Wind part
+						//DONE: missing wind
+						// wind settings
+						float3 wind_direction = float3(1.0, 0.0, 0.0);
+						float cloud_speed = 500.0;
+
+						// cloud_top offset - push the tops of the clouds along this wind direction by this many units.
+						float cloud_top_offset = 500.0;
+
+						// skew in wind direction
+						p += height_fraction * wind_direction * cloud_top_offset;
+
+						//animate clouds in wind direction and add a small upward bias to the wind direction
+						p += (wind_direction + float3(0.0, 0.1, 0.0)) * _Time * cloud_speed;
+						//=========================================================
+					}
+
 					// add some turbulence to bottoms of clouds using curl noise.  Ramp the effect down over height and scale it by some value (200 in this example)
 					float2 curl_noise =  SampleCloudCurlTexture(float3(p.x, p.y, 0.0)).rg;
 					p.xy += curl_noise.rg * (1.0 - height_fraction) * 200.0;
@@ -435,7 +437,7 @@ Shader "Render/CloudShader"
 				//Powder effect term
 				float powder = Powder(densitySum);
 
-				return lightColor* lightEnergy * hgTotal * powder;
+				return 2* lightColor * lightEnergy * hgTotal * powder;
 			}
 
 			float4 RayMarchingCloud(float3 eyeRay, float4 bg)
@@ -448,7 +450,7 @@ Shader "Render/CloudShader"
 				//1.get the start and end point of cloud
 				//from _CloudHeightMaxMin
 				//for batter result, use sphere to get this 
-				//because earch is sphere
+				//because earth is sphere
 				float2 sampleMaxMin = _CloudHeightMaxMin.xy / eyeRay.y;
 
 				//start ray marching from min height of the cloud
@@ -493,7 +495,7 @@ Shader "Render/CloudShader"
 				}
 				//final.rgb *= extinction;
 				
-				final.a = saturate(1-extinction);				
+				final.a = saturate(1-extinction);
 
 				float horizonFade = (1.0f - saturate(sampleMaxMin.x / 50000));
 				final *= horizonFade;
