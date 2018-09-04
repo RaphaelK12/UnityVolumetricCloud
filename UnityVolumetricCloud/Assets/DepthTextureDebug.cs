@@ -18,7 +18,7 @@ public class DepthTextureDebug : MonoBehaviour
 
     private void OnGUI()
     {
-        if (this.gameObject.activeSelf == false) return;
+        if (this.gameObject.activeSelf == false || this.target.renderTexture == null) return;
         var w = this.target.renderTexture.width/5;
         GUI.DrawTexture(new Rect(0,0, w, w), this.target.renderTexture);
     }

@@ -32,7 +32,7 @@ public class DetailWorleyNoise : NoiseTexture
         float worley1 = this._worleyNoise1.GetNoiseData(x, y, z);
         float worley2 = this._worleyNoise2.GetNoiseData(x, y, z);
 
-        return new Color(worley0, worley1, worley2, 0);
+        return new Color(worley0, worley1, worley2, 1);
     }
 
 }

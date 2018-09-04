@@ -26,6 +26,7 @@ Shader "Render/CloudShader"
 			#include "UnityCG.cginc"
 			#include "Lighting.cginc" // for light color
 			#include "Assets/Common.cginc"
+			#include "Assets/Shaders/SimplexNoise3D.hlsl"
 
 			struct vIn
 			{
@@ -167,6 +168,41 @@ Shader "Render/CloudShader"
 				return result;
 			}
 
+			// https://github.com/cabbibo/glsl-curl-noise/blob/master/curl.glsl
+			float3 SnoiseVec3(float3 x) {
+
+				float s = snoise(x);
+				float s1 = snoise(float3(x.y - 19.1, x.z + 33.4, x.x + 47.2));
+				float s2 = snoise(float3(x.z + 74.2, x.x - 124.5, x.y + 99.4));
+				float3 c = float3(s, s1, s2);
+				return c;
+			}
+
+
+			float3 CurlNoise(float3 p) 
+			{
+
+				const float e = .1;
+				float3 dx = float3(e, 0.0, 0.0);
+				float3 dy = float3(0.0, e, 0.0);
+				float3 dz = float3(0.0, 0.0, e);
+
+				float3 p_x0 = SnoiseVec3(p - dx);
+				float3 p_x1 = SnoiseVec3(p + dx);
+				float3 p_y0 = SnoiseVec3(p - dy);
+				float3 p_y1 = SnoiseVec3(p + dy);
+				float3 p_z0 = SnoiseVec3(p - dz);
+				float3 p_z1 = SnoiseVec3(p + dz);
+
+				float x = p_y1.z - p_y0.z - p_z1.y + p_z0.y;
+				float y = p_z1.x - p_z0.x - p_x1.z + p_x0.z;
+				float z = p_x1.y - p_x0.y - p_y1.x + p_y0.x;
+
+				const float divisor = 1.0 / (2.0 * e);
+				return normalize(float3(x, y, z) * divisor);
+
+			}
+
 			// Utility function that maps a value from one range to another.
 			float Remap(float original_value, float original_min, float original_max, float new_min, float new_max)
 			{
@@ -292,8 +328,7 @@ Shader "Render/CloudShader"
 				float low_freq_fBm = (low_frequency_noises.g * 0.625) + (low_frequency_noises.b * 0.25) + (low_frequency_noises.a * 0.125);
 				
 				// define the base cloud shape by dilating it with the low frequency fBm made of Worley noise.
-				// here is slightlt different than original code WITHOUT Nagative below
-				float base_cloud = Remap(low_frequency_noises.r, (1.0 - low_freq_fBm), 1.0, 0.0, 1.0);
+				float base_cloud = Remap(low_frequency_noises.r, -(1.0 - low_freq_fBm), 1.0, 0.0, 1.0);
 				float height_fraction = GetHeightFractionForPoint(p, _CloudHeightMaxMin);				
 
 				//DONE: missing density_height_gradient
@@ -315,7 +350,8 @@ Shader "Render/CloudShader"
 
 				float base_cloud_with_coverage  = 0;
 
-				if(1)//this will have more control on cloud coverage than code in else cluase.
+
+				if(0)//this will have more control on cloud coverage than code in else cluase.
 				{
 					//_CoverageScale in range (0,1) will change texture_coverage;
 					//_CoverageScale in range (1,2) will get over_all value from texture_coverage to 1;
@@ -326,7 +362,7 @@ Shader "Render/CloudShader"
 				{				
 					// I do not use the following two lines because I want to map coverage(_CoverageScale value from 0 to 2)
 					//from 0 to texture's cloud_coverage then to base_cloud value
-					base_cloud_with_coverage = Remap(base_cloud, saturate(cloud_coverage ), 1.0, 0.0, 1.0);
+					base_cloud_with_coverage = Remap(base_cloud, saturate(cloud_coverage * _CoverageScale), 1.0, 0.0, 1.0);
 					//base_cloud_with_coverage = base_cloud_with_coverage > 0 ? base_cloud_with_coverage : cloud_coverage;
 					//Multiply result by cloud coverage so that smaller clouds are lighter and more aesthetically pleasing.
 					base_cloud_with_coverage *= cloud_coverage;
@@ -359,7 +395,7 @@ Shader "Render/CloudShader"
 					}
 
 					// add some turbulence to bottoms of clouds using curl noise.  Ramp the effect down over height and scale it by some value (200 in this example)
-					float2 curl_noise =  SampleCloudCurlTexture(float3(p.x, p.y, 0.0)).rg;
+					float2 curl_noise = SampleCloudCurlTexture(p);// CurlNoise(p*_CurlNoiseUVScale).rg;
 					p.xy += curl_noise.rg * (1.0 - height_fraction) * 200.0;
 
 					// sample high-frequency noises
@@ -481,16 +517,15 @@ Shader "Render/CloudShader"
 						float3 lightColor = SampleLight(pos, eyeRay);
 						//3.3.2 blend light color with current depth
 						densitySum += densityScaled;
-						lightColor *= densityScaled;
 
-						extinction *= BeerLambert(densityScaled);
+						extinction = BeerLambert(densitySum);
 
-						final.rgb += (ambientColor + lightColor) * extinction;
+						final.rgb += (ambientColor + lightColor) * densityScaled * extinction;
 					}
 					//3.4 move step_length forward
 					pos += stepLength;
 
-					if(extinction < 0.001) 
+					if(extinction < 1e-5) 
 						break;
 				}
 				//final.rgb *= extinction;
