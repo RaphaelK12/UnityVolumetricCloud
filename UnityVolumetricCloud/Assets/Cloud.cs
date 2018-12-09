@@ -173,4 +173,10 @@ public class Cloud : MonoBehaviour {
     {
         Graphics.Blit(source, destination, this._mat);
     }
+
+	void OnGUI()
+	{
+		GUI.Label (new Rect(10,10,100,30), "Cloud Coverage");
+		coverageScale = GUI.HorizontalSlider (new Rect (10, 50, 100, 30), coverageScale, 0,2);
+	}
 }
