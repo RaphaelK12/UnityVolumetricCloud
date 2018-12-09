@@ -3,10 +3,12 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
-using UnityEditor;
 using UnityEngine;
 using UnityEngine.Assertions;
 
+#if UNITY_EDITOR
+using UnityEditor;
+#endif
 [ExecuteInEditMode]
 public class NoiseTexture : MonoBehaviour
 {
@@ -309,6 +311,7 @@ public class NoiseTexture : MonoBehaviour
         GUI.DrawTexture(new Rect(pos.x,pos.y, w, w), this._debugTexture);
     }
 
+	#if UNITY_EDITOR
     public void SaveToAsset()
     {
         // Make a proper path from the current selection.
@@ -363,5 +366,6 @@ public class NoiseTexture : MonoBehaviour
         //get data from loaded texture
         this.ReadPixelFromTexture();
         this.FillDebugTexture();
-    }
+	}
+	#endif
 }

@@ -1,6 +1,9 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
+
+#if UNITY_EDITOR
 using UnityEditor;
+#endif
 using UnityEngine;
 
 public class Texture3DGenerator : ScriptableObject
@@ -8,6 +11,7 @@ public class Texture3DGenerator : ScriptableObject
     [SerializeField]
     private Texture3D _texture;
 
+	#if UNITY_EDITOR
     public void Rebuild()
     {
         var assetName = "CloudTexture.asset";
@@ -31,4 +35,5 @@ public class Texture3DGenerator : ScriptableObject
         // Save the generated mesh asset.
         AssetDatabase.SaveAssets();
     }
+	#endif
 }
